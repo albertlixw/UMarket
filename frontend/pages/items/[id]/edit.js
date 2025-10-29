@@ -4,6 +4,7 @@ import Layout from '../../../components/Layout';
 import ListingForm from '../../../components/ListingForm';
 import { useAuth } from '../../../context/AuthContext';
 import { apiFetch } from '../../../utils/apiClient';
+import ListingPhotoEditor from '../../../components/ListingPhotoEditor';
 
 export default function EditListing() {
   const router = useRouter();
@@ -127,7 +128,9 @@ export default function EditListing() {
         error={formError}
         allowSoldToggle
         submitLabel="Update listing"
-      />
+      >
+        <ListingPhotoEditor productId={listing.id} userId={user?.id} maxPhotos={5} />
+      </ListingForm>
       <div style={{ marginTop: '1rem' }}>
         <button type="button" onClick={handleDelete} style={{ color: '#b00020' }}>
           Delete listing

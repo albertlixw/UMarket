@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -6,6 +7,15 @@ export default function Layout({ children, searchSlot = null }) {
   const { user, loading, signOut, signInWithGoogle } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
+  const router = useRouter();
+
+  function navLinkClass(path) {
+    const isActive =
+      path === '/'
+        ? router.pathname === '/'
+        : router.pathname.startsWith(path) || router.asPath.startsWith(path);
+    return `nav__link${isActive ? ' nav__link--active' : ''}`;
+  }
 
   return (
     <div className="container">
@@ -16,9 +26,18 @@ export default function Layout({ children, searchSlot = null }) {
           </Link>
           {!loading && user && (
             <>
-              <Link href="/dashboard/profile">Profile</Link>
-              <Link href="/dashboard/listings">My Listings</Link>
-              <Link href="/dashboard/orders">My Orders</Link>
+              <Link href="/dashboard/profile" className={navLinkClass('/dashboard/profile')}>
+                Profile
+              </Link>
+              <Link href="/dashboard/listings" className={navLinkClass('/dashboard/listings')}>
+                My Listings
+              </Link>
+              <Link href="/dashboard/orders" className={navLinkClass('/dashboard/orders')}>
+                My Orders
+              </Link>
+              <Link href="/messages" className={navLinkClass('/messages')}>
+                Messages
+              </Link>
             </>
           )}
         </div>

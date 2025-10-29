@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../utils/apiClient';
+import { fetchPrimaryImageMap } from '../utils/listingImages';
 
 // home page with all available items. users can see listings
 
@@ -47,6 +48,8 @@ export default function Home() {
   const [searchTerm, setSearchTerm] = useState('');
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(null);
+  const [previewImages, setPreviewImages] = useState({});
+  const [previewError, setPreviewError] = useState(null);
   const { user } = useAuth();
   const router = useRouter();
   const activeCategory =
@@ -147,6 +150,35 @@ export default function Home() {
 
   const previewResults = hasActiveSearch ? searchResults.slice(0, 20) : [];
 
+  useEffect(() => {
+    const activeList = hasActiveSearch ? searchResults : listings;
+    const ids = activeList.map((item) => item.id).filter(Boolean);
+    if (ids.length === 0) {
+      setPreviewImages({});
+      setPreviewError(null);
+      return;
+    }
+    let cancelled = false;
+    async function loadPreviews() {
+      setPreviewError(null);
+      try {
+        const map = await fetchPrimaryImageMap(ids);
+        if (!cancelled) {
+          setPreviewImages(map);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load listing previews', error);
+          setPreviewError(error.message);
+        }
+      }
+    }
+    loadPreviews();
+    return () => {
+      cancelled = true;
+    };
+  }, [hasActiveSearch, listings, searchResults]);
+
   const searchControl = (
     <div className="nav-search-wrapper">
       <div className="nav-search">
@@ -243,6 +275,7 @@ export default function Home() {
           </div>
         )}
         {loading && <p>Loading…</p>}
+        {previewError && <p style={{ color: 'var(--color-link)' }}>{previewError}</p>}
         {!loading && !searching && filteredListings.length === 0 && (
           <p>
             {activeCategory
@@ -267,9 +300,15 @@ export default function Home() {
               const badgeClass = isSoldOut
                 ? 'home-listings__badge home-listings__badge--sold'
                 : 'home-listings__badge home-listings__badge--available';
+              const previewUrl = previewImages[listing.id];
 
               return (
                 <li key={listing.id} className="home-listings__item">
+                  {previewUrl && (
+                    <div className="home-listings__preview">
+                      <img src={previewUrl} alt={`${listing.name} preview`} />
+                    </div>
+                  )}
                   <div className="home-listings__header">
                     <h3 className="home-listings__title">
                       {hasActiveSearch ? highlight(listing.name) : listing.name}

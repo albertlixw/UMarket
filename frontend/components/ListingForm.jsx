@@ -23,6 +23,7 @@ export default function ListingForm({
   error,
   allowSoldToggle = false,
   submitLabel = 'Save listing',
+  children = null,
 }) {
   const [values, setValues] = useState(() => ({
     ...DEFAULT_VALUES,
@@ -85,79 +86,82 @@ export default function ListingForm({
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <div style={{ marginBottom: '0.5rem' }}>
-        <label htmlFor="name">Name</label>
-        <br />
-        <input
-          id="name"
-          type="text"
-          value={values.name}
-          onChange={(event) => handleChange('name', event.target.value)}
-          required
-        />
-      </div>
-      <div style={{ marginBottom: '0.5rem' }}>
-        <label htmlFor="price">Price (USD)</label>
-        <br />
-        <input
-          id="price"
-          type="number"
-          value={values.price}
-          onChange={(event) => handleChange('price', event.target.value)}
-          required
-          step="0.01"
-          min="0"
-        />
-      </div>
-      <div style={{ marginBottom: '0.5rem' }}>
-        <label htmlFor="quantity">Quantity</label>
-        <br />
-        <input
-          id="quantity"
-          type="number"
-          value={values.quantity}
-          onChange={(event) => handleChange('quantity', event.target.value)}
-          required
-          min="0"
-          step="1"
-        />
-      </div>
-      <div style={{ marginBottom: '0.5rem' }}>
-        <label htmlFor="category">Category</label>
-        <br />
-        <select
-          id="category"
-          value={values.category}
-          onChange={(event) => handleChange('category', event.target.value)}
-          required
-        >
-          <option value="">Select a category</option>
-          {CATEGORY_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      {allowSoldToggle && (
-        <div style={{ marginBottom: '0.5rem' }}>
-          <label htmlFor="sold">
-            <input
-              id="sold"
-              type="checkbox"
-              checked={Boolean(values.sold)}
-              onChange={(event) => handleChange('sold', event.target.checked)}
-              style={{ marginRight: '0.4rem' }}
-            />
-            Mark as sold
-          </label>
+    <form className="listing-form" onSubmit={handleSubmit}>
+      <div className="listing-form__grid">
+        <div className="listing-form__field">
+          <label htmlFor="name">Listing title</label>
+          <input
+            id="name"
+            type="text"
+            value={values.name}
+            onChange={(event) => handleChange('name', event.target.value)}
+            placeholder="Vintage desk lamp"
+            required
+          />
         </div>
-      )}
-      {(localError || error) && <p style={{ color: 'red' }}>{localError || error}</p>}
-      <button type="submit" disabled={submitting}>
-        {submitting ? 'Saving…' : submitLabel}
-      </button>
+        <div className="listing-form__field">
+          <label htmlFor="price">Price (USD)</label>
+          <input
+            id="price"
+            type="number"
+            value={values.price}
+            onChange={(event) => handleChange('price', event.target.value)}
+            required
+            step="0.01"
+            min="0"
+            placeholder="25.00"
+          />
+        </div>
+        <div className="listing-form__field">
+          <label htmlFor="quantity">Quantity</label>
+          <input
+            id="quantity"
+            type="number"
+            value={values.quantity}
+            onChange={(event) => handleChange('quantity', event.target.value)}
+            required
+            min="0"
+            step="1"
+            placeholder="1"
+          />
+        </div>
+        <div className="listing-form__field">
+          <label htmlFor="category">Category</label>
+          <select
+            id="category"
+            value={values.category}
+            onChange={(event) => handleChange('category', event.target.value)}
+            required
+          >
+            <option value="">Select a category</option>
+            {CATEGORY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {allowSoldToggle && (
+          <div className="listing-form__field listing-form__field--checkbox">
+            <label htmlFor="sold">
+              <input
+                id="sold"
+                type="checkbox"
+                checked={Boolean(values.sold)}
+                onChange={(event) => handleChange('sold', event.target.checked)}
+              />
+              Mark as sold
+            </label>
+          </div>
+        )}
+      </div>
+      {children && <div className="listing-form__section">{children}</div>}
+      {(localError || error) && <p className="listing-form__error">{localError || error}</p>}
+      <div className="listing-form__footer">
+        <button type="submit" disabled={submitting}>
+          {submitting ? 'Saving…' : submitLabel}
+        </button>
+      </div>
     </form>
   );
 }
