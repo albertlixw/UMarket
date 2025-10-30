@@ -297,32 +297,52 @@ export default function Home() {
                 typeof listing.category === 'string' && listing.category
                   ? listing.category.toLowerCase()
                   : 'miscellaneous';
+              const categoryLabel = getCategoryName(categoryValue);
               const badgeClass = isSoldOut
                 ? 'home-listings__badge home-listings__badge--sold'
                 : 'home-listings__badge home-listings__badge--available';
               const previewUrl = previewImages[listing.id];
+              const hasPreview = Boolean(previewUrl);
+              const placeholderInitial =
+                typeof listing.name === 'string' && listing.name.trim()
+                  ? listing.name.trim().charAt(0).toUpperCase()
+                  : categoryLabel.charAt(0).toUpperCase();
 
               return (
-                <li key={listing.id} className="home-listings__item">
-                  {previewUrl && (
+                <li
+                  key={listing.id}
+                  className={`home-listings__item${hasPreview ? '' : ' home-listings__item--no-preview'}`}
+                >
+                  {hasPreview ? (
                     <div className="home-listings__preview">
                       <img src={previewUrl} alt={`${listing.name} preview`} />
                     </div>
+                  ) : (
+                    <div className="home-listings__placeholder" role="img" aria-label="Listing photo pending">
+                      <span className="home-listings__placeholder-initial" aria-hidden="true">
+                        {placeholderInitial}
+                      </span>
+                      <span className="home-listings__placeholder-label">Photo coming soon</span>
+                    </div>
                   )}
-                  <div className="home-listings__header">
-                    <h3 className="home-listings__title">
-                      {hasActiveSearch ? highlight(listing.name) : listing.name}
-                    </h3>
-                    <span className={badgeClass}>{isSoldOut ? 'Sold out' : 'Available'}</span>
+                  <div className="home-listings__details">
+                    <div className="home-listings__primary">
+                      <div className="home-listings__header">
+                        <h3 className="home-listings__title">
+                          {hasActiveSearch ? highlight(listing.name) : listing.name}
+                        </h3>
+                        <span className={badgeClass}>{isSoldOut ? 'Sold out' : 'Available'}</span>
+                      </div>
+                      <p className="home-listings__price">{priceLabel}</p>
+                      <p className="home-listings__meta">
+                        Category: <strong>{categoryLabel}</strong>
+                      </p>
+                      <p className="home-listings__meta">Quantity: {quantity}</p>
+                    </div>
+                    <Link href={`/items/${listing.id}`} className="home-listings__link">
+                      View listing
+                    </Link>
                   </div>
-                  <p className="home-listings__price">{priceLabel}</p>
-                  <p className="home-listings__meta">
-                    Category: <strong>{getCategoryName(categoryValue)}</strong>
-                  </p>
-                  <p className="home-listings__meta">Quantity: {quantity}</p>
-                  <Link href={`/items/${listing.id}`} className="home-listings__link">
-                    View listing
-                  </Link>
                 </li>
               );
             })}

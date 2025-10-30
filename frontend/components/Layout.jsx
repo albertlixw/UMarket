@@ -2,9 +2,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import AuthNotice from './AuthNotice';
+import GoogleButton from './GoogleButton';
 
 export default function Layout({ children, searchSlot = null }) {
-  const { user, loading, signOut, signInWithGoogle } = useAuth();
+  const { user, loading, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
   const router = useRouter();
@@ -64,13 +66,12 @@ export default function Layout({ children, searchSlot = null }) {
               </button>
             </>
           ) : (
-            <button type="button" onClick={signInWithGoogle}>
-              Sign in
-            </button>
+            <GoogleButton label="Sign in" />
           )}
         </div>
       </header>
       <main>{children}</main>
+      <AuthNotice />
     </div>
   );
 }
