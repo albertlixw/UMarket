@@ -427,6 +427,15 @@ export default function ListingDetail() {
             )}
             {photosError && <p className="listing-gallery__error">{photosError}</p>}
             {primaryImageError && <p className="listing-gallery__error">{primaryImageError}</p>}
+            {primaryDisplayUrl && (
+              <div className="listing-gallery__debug-preview">
+                <img
+                  src={primaryDisplayUrl}
+                  alt={listing?.name || 'Listing photo preview'}
+                  style={{ marginTop: '1rem', maxWidth: '100%', borderRadius: '0.75rem' }}
+                />
+              </div>
+            )}
           </div>
 
           <aside className="listing-detail__sidebar">
