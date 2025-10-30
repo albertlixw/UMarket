@@ -99,6 +99,7 @@ export default function MessagesPage() {
   const [sending, setSending] = useState(false);
   const [profileCache, setProfileCache] = useState({});
   const profileCacheRef = useRef({});
+  const messagesMapRef = useRef({});
   const messagesContainerRef = useRef(null);
 
   const queryChatId = router.query.chat ? String(router.query.chat) : null;
@@ -182,6 +183,10 @@ export default function MessagesPage() {
     [decoratedChats, selectedChatId],
   );
 
+  useEffect(() => {
+    messagesMapRef.current = messagesMap;
+  }, [messagesMap]);
+
   const scrollMessagesToBottom = useCallback((behavior = 'auto') => {
     const container = messagesContainerRef.current;
     if (container) {
@@ -195,7 +200,7 @@ export default function MessagesPage() {
   const markChatAsRead = useCallback(
     async (chatId, sourceMessages) => {
       if (!user || !chatId) return;
-      const list = sourceMessages || messagesMap[chatId] || [];
+      const list = sourceMessages || messagesMapRef.current[chatId] || [];
       if (!list.length) return;
       const unreadMessages = list.filter((msg) => msg.sender_id !== user.id && !msg.read_at);
       if (!unreadMessages.length) return;
@@ -231,7 +236,7 @@ export default function MessagesPage() {
         ),
       );
     },
-    [messagesMap, user],
+    [user],
   );
 
   const loadChats = useCallback(async () => {
