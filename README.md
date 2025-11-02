@@ -169,6 +169,13 @@ umarket/
    # Edit backend/.env and set SUPABASE_URL, SUPABASE_API_KEY, SUPABASE_JWT_SECRET, FRONTEND_URLS
    ```
 
+  Windows(Git Bash):
+  ```bash
+  cd backend
+  source venv/Scripts/activate
+  python3 -m pip install -r requirements.txt
+  uvicorn main:app --reload --env-file backend/.env
+
    Windows (PowerShell):
    ```powershell
    Copy-Item backend/.env.example backend/.env
