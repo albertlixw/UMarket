@@ -125,7 +125,7 @@ export default function ListingForm({
             placeholder="1"
           />
         </div>
-        <div className="listing-form__field">
+        {/* <div className="listing-form__field">
           <label htmlFor="category">Category</label>
           <select
             id="category"
@@ -140,7 +140,7 @@ export default function ListingForm({
               </option>
             ))}
           </select>
-        </div>
+        </div> */}
         {allowSoldToggle && (
           <div className="listing-form__field listing-form__field--checkbox">
             <label htmlFor="sold">
