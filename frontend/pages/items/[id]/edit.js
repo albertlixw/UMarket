@@ -112,10 +112,12 @@ export default function EditListing() {
 
   const initialValues = {
     name: listing.name,
+    description: listing.description ?? '',
     price: listing.price,
     quantity: listing.quantity ?? 1,
     sold: listing.sold ?? false,
     category: listing.category ?? 'miscellaneous',
+    details: listing.details ?? null,
   };
 
   return (

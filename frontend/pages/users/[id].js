@@ -4,14 +4,15 @@ import { useRouter } from 'next/router';
 import Layout from '../../components/Layout';
 import { apiFetch } from '../../utils/apiClient';
 import { supabase } from '../../utils/supabaseClient';
-
-const CATEGORY_LABELS = {
-  decor: 'Decor',
-  clothing: 'Clothing',
-  'school-supplies': 'School Supplies',
-  tickets: 'Tickets',
-  miscellaneous: 'Miscellaneous',
-};
+import {
+  CATEGORY_LABELS,
+  COLOR_LABELS,
+  CLOTHING_GENDER_LABELS,
+  CLOTHING_SIZE_LABELS,
+  CLOTHING_TYPE_LABELS,
+  DECOR_TYPE_LABELS,
+  TICKET_TYPE_LABELS,
+} from '../../constants/categories';
 const AVATAR_BUCKET = process.env.NEXT_PUBLIC_SUPABASE_AVATAR_BUCKET || 'avatars';
 
 function initialsFromName(name) {
@@ -26,6 +27,33 @@ function initialsFromName(name) {
   const last = segments[segments.length - 1]?.[0] || '';
   const value = `${first}${last}`.toUpperCase();
   return value || 'U';
+}
+
+function summarizeDetails(listing) {
+  const details = listing?.details;
+  if (!details || typeof details !== 'object') {
+    return null;
+  }
+  if (details.category === 'clothing') {
+    const parts = [
+      CLOTHING_GENDER_LABELS[details.gender] || details.gender,
+      CLOTHING_SIZE_LABELS[details.size] || details.size,
+      CLOTHING_TYPE_LABELS[details.type] || details.type,
+      COLOR_LABELS[details.color] || details.color,
+    ].filter(Boolean);
+    return parts.join(' • ') || null;
+  }
+  if (details.category === 'decor') {
+    const parts = [
+      DECOR_TYPE_LABELS[details.type] || details.type,
+      COLOR_LABELS[details.color] || details.color,
+    ].filter(Boolean);
+    return parts.join(' • ') || null;
+  }
+  if (details.category === 'tickets') {
+    return TICKET_TYPE_LABELS[details.type] || details.type || null;
+  }
+  return null;
 }
 
 export default function PublicUserProfile() {
@@ -190,6 +218,15 @@ export default function PublicUserProfile() {
                   : 'home-listings__badge home-listings__badge--available';
                 const priceLabel =
                   typeof listing.price === 'number' ? `$${listing.price.toFixed(2)}` : 'Not set';
+                const categorySlug = String(listing.category || '').toLowerCase();
+                const categoryLabel = CATEGORY_LABELS[categorySlug] || 'Miscellaneous';
+                const detailSummary = summarizeDetails(listing);
+                const rawDescription =
+                  typeof listing.description === 'string' ? listing.description.trim() : '';
+                const shortenedDescription =
+                  rawDescription.length > 0
+                    ? `${rawDescription.slice(0, 140)}${rawDescription.length > 140 ? '…' : ''}`
+                    : null;
 
                 return (
                   <li key={listing.id} className="home-listings__item">
@@ -200,10 +237,12 @@ export default function PublicUserProfile() {
                     <p className="home-listings__price">{priceLabel}</p>
                     <p className="home-listings__meta">
                       Category:{' '}
-                      <strong>
-                        {CATEGORY_LABELS[listing.category] || 'Miscellaneous'}
-                      </strong>
+                      <strong>{categoryLabel}</strong>
                     </p>
+                    {shortenedDescription && (
+                      <p className="home-listings__summary">{shortenedDescription}</p>
+                    )}
+                    {detailSummary && <p className="home-listings__meta">{detailSummary}</p>}
                     <p className="home-listings__meta">Quantity: {quantity}</p>
                     <Link href={`/items/${listing.id}`} className="home-listings__link">
                       View listing

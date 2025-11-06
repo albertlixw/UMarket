@@ -119,15 +119,22 @@ def create_listing(listing: schemas.ListingCreate, user_id: str = Depends(get_cu
     #create a new listing owned by the authenticaed user
 
     data = listing.dict(exclude_unset=True)
+    details_payload = data.pop("details", None)
+    description = data.get("description")
+    if isinstance(description, str):
+        description = description.strip()
+        if description == "":
+            description = None
     listing_data = {
         "seller_id": user_id,
         "name": data["name"],
+        "description": description,
         "price": data["price"],
         "quantity": data.get("quantity", 1),
         "sold": False,
         "category": data["category"],
     }
-    created = database.create_listing(listing_data)
+    created = database.create_listing(listing_data, details=details_payload)
     return created
 
 
@@ -158,9 +165,26 @@ def edit_listing(
         )
 
     data = listing.dict(exclude_unset=True)
+    details_payload = data.pop("details", None)
+    existing_details = existing.get("details")
+    final_category = data.get("category") or existing.get("category")
+    details_changed = (
+        details_payload is not None and details_payload != (existing_details or None)
+    )
+    if details_payload is None and final_category == existing.get("category"):
+        details_to_persist = existing_details
+    else:
+        details_to_persist = details_payload
     update_data: Dict[str, Any] = {}
     if data.get("name") is not None:
         update_data["name"] = data["name"]
+    if "description" in data:
+        description_value = data["description"]
+        if isinstance(description_value, str):
+            description_value = description_value.strip()
+            if description_value == "":
+                description_value = None
+        update_data["description"] = description_value
     if data.get("price") is not None:
         update_data["price"] = data["price"]
     if data.get("quantity") is not None:
@@ -169,9 +193,16 @@ def edit_listing(
         update_data["sold"] = data["sold"]
     if data.get("category") is not None:
         update_data["category"] = data["category"]
-    if not update_data:
+    if not update_data and not details_changed:
         return existing
-    updated = database.update_listing(listing_id, update_data)
+    if isinstance(details_to_persist, dict):
+        details_to_persist = dict(details_to_persist)
+    updated = database.update_listing(
+        listing_id,
+        update_data,
+        category=update_data.get("category"),
+        details=details_to_persist,
+    )
     return updated
 
 
@@ -240,7 +271,7 @@ def create_order(order: schemas.OrderCreate, user_id: str = Depends(get_current_
         "buyer_id": user_id,
     }
     if order.payment_method:
-        order_payload["payment_method"] = order.payment_method
+        order_payload["payment_method"] = order.payment_method.upper()
 
     created = database.create_order(order_payload)
 
@@ -253,7 +284,11 @@ def create_order(order: schemas.OrderCreate, user_id: str = Depends(get_current_
     else:
         update_fields["sold"] = True
     if update_fields:
-        database.update_listing(order.listing_id, update_fields)
+        database.update_listing(
+            order.listing_id,
+            update_fields,
+            details=listing.get("details"),
+        )
 
     return created
 

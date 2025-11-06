@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Layout from '../../components/Layout';
 import { useAuth } from '../../context/AuthContext';
 import { apiFetch } from '../../utils/apiClient';
+import { PAYMENT_METHOD_LABELS } from '../../constants/categories';
 
 function OrderList({ title, orders, emptyMessage }) {
   return (
@@ -15,6 +16,9 @@ function OrderList({ title, orders, emptyMessage }) {
         <ul>
           {orders.map((order) => {
             const product = order.product;
+            const paymentLabel = order.payment_method
+              ? PAYMENT_METHOD_LABELS[order.payment_method] || order.payment_method
+              : 'Not provided';
             return (
               <li key={order.id} style={{ marginBottom: '1rem' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -22,7 +26,7 @@ function OrderList({ title, orders, emptyMessage }) {
                   {typeof product?.price === 'number' && (
                     <span>Price: ${product.price.toFixed(2)}</span>
                   )}
-                  <span>Payment method: {order.payment_method || 'Not provided'}</span>
+                  <span>Payment method: {paymentLabel}</span>
                   {order.created_at && (
                     <span>Created: {new Date(order.created_at).toLocaleString()}</span>
                   )}

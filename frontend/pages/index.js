@@ -5,6 +5,7 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../utils/apiClient';
 import { fetchPrimaryImageMap } from '../utils/listingImages';
+import { CATEGORY_LABELS } from '../constants/categories';
 
 // home page with all available items. users can see listings
 
@@ -110,8 +111,11 @@ export default function Home() {
   }, [activeCategory, listings, searchResults, searchTerm]);
 
   function getCategoryName(slug) {
-    const match = CATEGORY_CARDS.find((category) => category.slug === slug);
-    return match ? match.name : slug;
+    if (!slug) {
+      return 'Miscellaneous';
+    }
+    const normalized = String(slug).toLowerCase();
+    return CATEGORY_LABELS[normalized] || slug;
   }
 
   function handleCategorySelect(slug) {
@@ -240,19 +244,25 @@ export default function Home() {
           Jump straight to what you need with quick links to our most popular listing categories.
         </p>
         <div className="category-grid">
-          {CATEGORY_CARDS.map((category) => (
-            <Link
-              key={category.slug}
-              href={{ pathname: '/', query: { category: category.slug } }}
-              className={`category-card${
-                activeCategory === category.slug ? ' category-card--active' : ''
-              }`}
-              style={{ backgroundImage: category.backgroundImage }}
-            >
-              <span className="category-card__name">{category.name}</span>
-              <span className="category-card__cta">Explore listings</span>
-            </Link>
-          ))}
+          {CATEGORY_CARDS.map((category) => {
+            const normalizedSlug = category.slug;
+            const isActive = activeCategory === normalizedSlug;
+            return (
+              <button
+                key={normalizedSlug}
+                type="button"
+                onClick={() => handleCategorySelect(normalizedSlug)}
+                className={`category-card${isActive ? ' category-card--active' : ''}`}
+                style={{ backgroundImage: category.backgroundImage }}
+                aria-pressed={isActive}
+              >
+                <span className="category-card__name">{category.name}</span>
+                <span className="category-card__cta">
+                  {isActive ? 'Show all listings' : 'Explore listings'}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </section>
       <section className="home-listings">
@@ -269,9 +279,13 @@ export default function Home() {
             <span>
               Showing <strong>{getCategoryName(activeCategory)}</strong> listings.
             </span>
-            <Link href="/" className="listing-filter-banner__clear">
+            <button
+              type="button"
+              className="listing-filter-banner__clear"
+              onClick={() => handleCategorySelect(null)}
+            >
               Clear filter
-            </Link>
+            </button>
           </div>
         )}
         {loading && <p>Loading…</p>}
@@ -307,6 +321,12 @@ export default function Home() {
                 typeof listing.name === 'string' && listing.name.trim()
                   ? listing.name.trim().charAt(0).toUpperCase()
                   : categoryLabel.charAt(0).toUpperCase();
+              const rawDescription =
+                typeof listing.description === 'string' ? listing.description.trim() : '';
+              const shortenedDescription =
+                rawDescription.length > 0
+                  ? `${rawDescription.slice(0, 160)}${rawDescription.length > 160 ? '…' : ''}`
+                  : '';
 
               return (
                 <li
@@ -337,6 +357,11 @@ export default function Home() {
                       <p className="home-listings__meta">
                         Category: <strong>{categoryLabel}</strong>
                       </p>
+                      {shortenedDescription && (
+                        <p className="home-listings__summary">
+                          {hasActiveSearch ? highlight(shortenedDescription) : shortenedDescription}
+                        </p>
+                      )}
                       <p className="home-listings__meta">Quantity: {quantity}</p>
                     </div>
                     <Link href={`/items/${listing.id}`} className="home-listings__link">

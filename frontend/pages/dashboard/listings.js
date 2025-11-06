@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import Layout from '../../components/Layout';
 import { useAuth } from '../../context/AuthContext';
 import { apiFetch } from '../../utils/apiClient';
+import { CATEGORY_LABELS } from '../../constants/categories';
 
 export default function DashboardListings() {
   const router = useRouter();
@@ -100,6 +101,14 @@ export default function DashboardListings() {
                   ? `$${listing.price.toFixed(2)}`
                   : 'Not set';
               const isSold = Boolean(listing.sold);
+              const categorySlug = String(listing.category || '').toLowerCase();
+              const categoryLabel = CATEGORY_LABELS[categorySlug] || 'Miscellaneous';
+              const rawDescription =
+                typeof listing.description === 'string' ? listing.description.trim() : '';
+              const shortenedDescription =
+                rawDescription.length > 0
+                  ? `${rawDescription.slice(0, 120)}${rawDescription.length > 120 ? '…' : ''}`
+                  : null;
 
               return (
                 <li key={listing.id} className="dashboard-listings__card">
@@ -117,12 +126,13 @@ export default function DashboardListings() {
                   <ul className="dashboard-listings__meta">
                     <li>
                       Category:{' '}
-                      <strong>
-                        {typeof listing.category === 'string' && listing.category
-                          ? listing.category
-                          : 'Miscellaneous'}
-                      </strong>
+                      <strong>{categoryLabel}</strong>
                     </li>
+                    {shortenedDescription && (
+                      <li>
+                        <span className="dashboard-listings__description">{shortenedDescription}</span>
+                      </li>
+                    )}
                     <li>
                       Quantity: <strong>{quantity}</strong>
                     </li>

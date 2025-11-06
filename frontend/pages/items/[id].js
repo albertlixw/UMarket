@@ -7,14 +7,16 @@ import { apiFetch } from '../../utils/apiClient';
 import { supabase } from '../../utils/supabaseClient';
 import { fetchListingGalleryImage, fetchProductImages } from '../../utils/listingImages';
 import { startChat } from '../../utils/chatApi';
-
-const CATEGORY_LABELS = {
-  decor: 'Decor',
-  clothing: 'Clothing',
-  'school-supplies': 'School Supplies',
-  tickets: 'Tickets',
-  miscellaneous: 'Miscellaneous',
-};
+import {
+  CATEGORY_LABELS,
+  COLOR_LABELS,
+  CLOTHING_GENDER_LABELS,
+  CLOTHING_SIZE_LABELS,
+  CLOTHING_TYPE_LABELS,
+  DECOR_TYPE_LABELS,
+  TICKET_TYPE_LABELS,
+  PAYMENT_METHOD_OPTIONS,
+} from '../../constants/categories';
 const AVATAR_BUCKET = process.env.NEXT_PUBLIC_SUPABASE_AVATAR_BUCKET || 'avatars';
 
 export default function ListingDetail() {
@@ -28,7 +30,7 @@ export default function ListingDetail() {
   const [updating, setUpdating] = useState(false);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderError, setOrderError] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [seller, setSeller] = useState(null);
   const [sellerLoading, setSellerLoading] = useState(false);
   const [sellerError, setSellerError] = useState(null);
@@ -177,6 +179,81 @@ export default function ListingDetail() {
     const slug = String(listing.category).trim().toLowerCase();
     return slug || 'miscellaneous';
   }, [listing?.category]);
+  const detailEntries = useMemo(() => {
+    const details = listing?.details;
+    if (!details || typeof details !== 'object') {
+      return [];
+    }
+    if (details.category === 'clothing') {
+      return [
+        {
+          label: 'Gender',
+          value: CLOTHING_GENDER_LABELS[details.gender] || details.gender || 'N/A',
+        },
+        {
+          label: 'Size',
+          value: CLOTHING_SIZE_LABELS[details.size] || details.size || 'N/A',
+        },
+        {
+          label: 'Type',
+          value: CLOTHING_TYPE_LABELS[details.type] || details.type || 'N/A',
+        },
+        {
+          label: 'Color',
+          value: COLOR_LABELS[details.color] || details.color || 'N/A',
+        },
+        {
+          label: 'Condition',
+          value: details.used ? 'Used' : 'New',
+        },
+      ];
+    }
+    if (details.category === 'decor') {
+      const entries = [
+        {
+          label: 'Type',
+          value: DECOR_TYPE_LABELS[details.type] || details.type || 'N/A',
+        },
+        {
+          label: 'Color',
+          value: COLOR_LABELS[details.color] || details.color || 'N/A',
+        },
+        {
+          label: 'Condition',
+          value: details.used ? 'Used' : 'New',
+        },
+      ];
+      const dimensionLabels = {
+        length: 'Length',
+        width: 'Width',
+        height: 'Height',
+      };
+      Object.keys(dimensionLabels).forEach((dimension) => {
+        const rawValue = details[dimension];
+        if (rawValue === undefined || rawValue === null || rawValue === '') {
+          return;
+        }
+        const parsed = Number(rawValue);
+        if (Number.isNaN(parsed) || parsed < 0) {
+          return;
+        }
+        entries.push({
+          label: `${dimensionLabels[dimension]} (in)`,
+          value: `${parsed} in`,
+        });
+      });
+      return entries;
+    }
+    if (details.category === 'tickets') {
+      return [
+        {
+          label: 'Type',
+          value: TICKET_TYPE_LABELS[details.type] || details.type || 'N/A',
+        },
+      ];
+    }
+    return [];
+  }, [listing]);
   const sellerName =
     seller?.full_name || seller?.email || (listing?.seller_id ? 'Seller' : 'Unknown seller');
   const activePhoto = useMemo(() => {
@@ -462,6 +539,26 @@ export default function ListingDetail() {
                 </span>
               </div>
             </div>
+            {(listing.description && listing.description.trim().length > 0) && (
+              <div className="listing-summary__card listing-summary__card--description">
+                <h2 className="listing-summary__section-title">Description</h2>
+                <p className="listing-summary__description">
+                  {listing.description.trim()}
+                </p>
+              </div>
+            )}
+            {detailEntries.length > 0 && (
+              <div className="listing-summary__card listing-summary__card--details">
+                <h2 className="listing-summary__section-title">Item details</h2>
+                <div className="listing-summary__meta">
+                  {detailEntries.map((entry) => (
+                    <span key={entry.label} className="listing-summary__meta-item">
+                      <strong>{entry.label}:</strong> {entry.value}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {message && (
               <p className="listing-summary__alert listing-summary__alert--success">{message}</p>
@@ -509,9 +606,11 @@ export default function ListingDetail() {
                           onChange={(event) => setPaymentMethod(event.target.value)}
                           className="listing-summary__select"
                         >
-                          <option value="cash">Cash</option>
-                          <option value="venmo">Venmo</option>
-                          <option value="paypal">PayPal</option>
+                          {PAYMENT_METHOD_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
                         </select>
                       </label>
                       <div className="listing-summary__actions">
