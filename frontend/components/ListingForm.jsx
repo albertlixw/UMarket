@@ -161,7 +161,7 @@ export default function ListingForm({
             placeholder="1"
           />
         </div>
-        {/* <div className="listing-form__field">
+        <div className="listing-form__field">
           <label htmlFor="category">Category</label>
           <select
             id="category"

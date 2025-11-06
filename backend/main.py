@@ -12,7 +12,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from fastapi.middleware.cors import CORSMiddleware
 
-import database, schemas
+from . import database, schemas
 
 app = FastAPI(title="UMarket API", version="0.1.0")
 
