@@ -41,8 +41,8 @@ implements a FastAPI backend and Next.js frontend.
 ## Reporting issues
 
 - Every order entry now includes a **Report buyer/seller** button that opens a short form asking for
-  a category, description, and optional evidence URLs. Reports can optionally point to the exact
-  transaction involved.
+  a category, description, and optional evidence photos (up to five images uploaded to Supabase
+  Storage). Reports can optionally point to the exact transaction involved.
 - The backend persists reports in `public.user_reports` with a simple status workflow (open,
   under review, resolved, dismissed). Reporters can add more detail while the report stays open.
 - Students can review their submitted reports at the bottom of **Dashboard → Orders** so they can
@@ -158,7 +158,12 @@ umarket/
    that the API and dashboard expect.
 5. **Create the reporting table** by executing `backend/sql/002_create_user_reports.sql`. This
    introduces the `user_reports` table plus indexes so buyers/sellers can flag suspicious activity.
-6. **Create the `restrict_signup_to_umass` function** in Supabase:
+6. **Create a public storage bucket for report evidence**:
+   - Navigate to **Storage → Buckets** and create a bucket named `report-evidence` (or match the value
+     you plan to set in `NEXT_PUBLIC_SUPABASE_REPORT_BUCKET` / `SUPABASE_REPORT_BUCKET`).
+   - Make it **public** so the URLs can be shared with moderators.
+   - Add a policy that lets authenticated users upload files within a folder prefixed by their UID.
+7. **Create the `restrict_signup_to_umass` function** in Supabase:
 
    ```sql
    create or replace function public.restrict_signup_to_umass(event jsonb)
@@ -184,7 +189,7 @@ umarket/
 
    Afterwards, enable a Before User Created hook using this function via
    **Authentication → Configuration → Auth Hooks (Beta)**.
-7. **Set up the avatars storage bucket**:
+8. **Set up the avatars storage bucket**:
    - Go to **Storage → Buckets** and create a bucket named `avatars` (or any name you prefer).
    - Mark the bucket as **public** so listing pages can display profile photos.
    - In **Policies**, allow authenticated users to upload/update files within their folder scope.
@@ -218,8 +223,9 @@ umarket/
    override the defaults by setting `SUPABASE_PRODUCTS_TABLE`,
    `SUPABASE_PRODUCT_ID_FIELD`, `SUPABASE_TRANSACTIONS_TABLE`,
    `SUPABASE_TRANSACTION_ID_FIELD`, or `SUPABASE_PRODUCT_RELATION` (to point at a
-   renamed FK) in `backend/.env`. Set `SUPABASE_AVATAR_BUCKET` if you created a
-   storage bucket name that differs from `avatars`.
+   renamed FK) in `backend/.env`. Set `SUPABASE_AVATAR_BUCKET` if you use a different
+   avatar bucket, and update `NEXT_PUBLIC_SUPABASE_REPORT_BUCKET` in the frontend
+   when you rename the evidence bucket.
 
 2. Install dependencies and start the server (requires Python 3.10+):
 

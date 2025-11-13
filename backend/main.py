@@ -15,6 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import database, schemas
 
+MAX_REPORT_EVIDENCE = 5
+
 app = FastAPI(title="UMarket API", version="0.1.0")
 
 frontend_origin_env = os.getenv("FRONTEND_URLS") or os.getenv("FRONTEND_URL", "http://localhost:3000")
@@ -63,7 +65,9 @@ def _clean_text(value: Optional[str]) -> Optional[str]:
     return text or None
 
 
-def _sanitize_evidence_urls(values: Optional[List[str]]) -> List[str]:
+def _sanitize_evidence_urls(
+    values: Optional[List[str]], max_items: int = MAX_REPORT_EVIDENCE
+) -> List[str]:
     if not values:
         return []
     cleaned: List[str] = []
@@ -73,6 +77,13 @@ def _sanitize_evidence_urls(values: Optional[List[str]]) -> List[str]:
         text = str(value).strip()
         if text:
             cleaned.append(text)
+        if len(cleaned) >= max_items:
+            break
+    if len(cleaned) > max_items:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"You can attach at most {max_items} evidence items",
+        )
     return cleaned
 
 

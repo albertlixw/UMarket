@@ -6,6 +6,10 @@ import { useAuth } from '../../context/AuthContext';
 import { apiFetch } from '../../utils/apiClient';
 import { PAYMENT_METHOD_LABELS } from '../../constants/categories';
 import { REPORT_CATEGORIES, REPORT_CATEGORY_LABELS, REPORT_STATUS_LABELS } from '../../constants/reports';
+import { supabase } from '../../utils/supabaseClient';
+
+const REPORT_EVIDENCE_BUCKET = process.env.NEXT_PUBLIC_SUPABASE_REPORT_BUCKET || 'report-evidence';
+const MAX_REPORT_EVIDENCE = 5;
 
 const STATUS_TEXT = {
   pending_meetup: 'Waiting for the meetup to happen',
@@ -124,7 +128,8 @@ export default function DashboardOrders() {
   const [reportTarget, setReportTarget] = useState(null);
   const [reportCategory, setReportCategory] = useState('SCAM');
   const [reportDescription, setReportDescription] = useState('');
-  const [reportEvidence, setReportEvidence] = useState('');
+  const [reportEvidenceFiles, setReportEvidenceFiles] = useState([]);
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [reportMessage, setReportMessage] = useState(null);
   const [reportError, setReportError] = useState(null);
@@ -161,6 +166,19 @@ export default function DashboardOrders() {
     fetchOrders();
   }, [user, accessToken]);
 
+  const deleteEvidenceUploads = useCallback(async (files) => {
+    if (!files || files.length === 0) {
+      return;
+    }
+    try {
+      await supabase.storage
+        .from(REPORT_EVIDENCE_BUCKET)
+        .remove(files.map((file) => file.path));
+    } catch (err) {
+      console.error('Failed to delete evidence uploads', err);
+    }
+  }, []);
+
   const handleConfirm = useCallback(
     async (orderId, role) => {
       if (!accessToken) return;
@@ -193,22 +211,97 @@ export default function DashboardOrders() {
     [accessToken]
   );
 
-  const resetReportForm = useCallback(() => {
-    setReportTarget(null);
-    setReportCategory('SCAM');
-    setReportDescription('');
-    setReportEvidence('');
-    setReportSubmitting(false);
-    setReportError(null);
-  }, []);
+  const resetReportForm = useCallback(
+    (options = { keepUploads: false }) => {
+      if (!options.keepUploads && reportEvidenceFiles.length) {
+        deleteEvidenceUploads(reportEvidenceFiles);
+      }
+      setReportTarget(null);
+      setReportCategory('SCAM');
+      setReportDescription('');
+      setReportEvidenceFiles([]);
+      setUploadingEvidence(false);
+      setReportSubmitting(false);
+      setReportError(null);
+    },
+    [deleteEvidenceUploads, reportEvidenceFiles]
+  );
 
-  const handleReportSelect = useCallback((order, role) => {
-    setReportMessage(null);
-    setReportError(null);
-    setReportTarget({ order, role });
-    setReportCategory('SCAM');
-    setReportDescription('');
-    setReportEvidence('');
+  const handleReportSelect = useCallback(
+    (order, role) => {
+      setReportMessage(null);
+      setReportError(null);
+      if (reportEvidenceFiles.length) {
+        deleteEvidenceUploads(reportEvidenceFiles);
+        setReportEvidenceFiles([]);
+      }
+      setReportTarget({ order, role });
+      setReportCategory('SCAM');
+      setReportDescription('');
+    },
+    [deleteEvidenceUploads, reportEvidenceFiles]
+  );
+
+  const handleEvidenceUpload = useCallback(
+    async (event) => {
+      const files = Array.from(event.target.files || []);
+      event.target.value = '';
+      if (!files.length) return;
+      if (!user) {
+        setReportError('You must be signed in to upload evidence.');
+        return;
+      }
+      const remaining = MAX_REPORT_EVIDENCE - reportEvidenceFiles.length;
+      if (remaining <= 0) {
+        setReportError(`You can upload up to ${MAX_REPORT_EVIDENCE} photos.`);
+        return;
+      }
+      const queue = files.slice(0, remaining);
+      setUploadingEvidence(true);
+      setReportError(null);
+      try {
+        for (const file of queue) {
+          if (!file.type.toLowerCase().startsWith('image/')) {
+            setReportError('Evidence must be image files.');
+            continue;
+          }
+          const safeName = file.name.replace(/[^a-zA-Z0-9_.-]/g, '_') || 'evidence.jpg';
+          const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}-${safeName}`;
+          const { error: uploadError } = await supabase.storage
+            .from(REPORT_EVIDENCE_BUCKET)
+            .upload(path, file, { upsert: false });
+          if (uploadError) {
+            throw uploadError;
+          }
+          const { data: publicData, error: publicError } = supabase.storage
+            .from(REPORT_EVIDENCE_BUCKET)
+            .getPublicUrl(path);
+          if (publicError || !publicData?.publicUrl) {
+            throw publicError || new Error('Unable to fetch evidence URL');
+          }
+          setReportEvidenceFiles((prev) => [
+            ...prev,
+            { name: file.name, url: publicData.publicUrl, path },
+          ]);
+        }
+      } catch (err) {
+        setReportError(err.message || 'Failed to upload evidence.');
+      } finally {
+        setUploadingEvidence(false);
+      }
+    },
+    [reportEvidenceFiles.length, user]
+  );
+
+  const handleEvidenceRemove = useCallback(async (path) => {
+    try {
+      await supabase.storage.from(REPORT_EVIDENCE_BUCKET).remove([path]);
+    } catch (err) {
+      console.error('Failed to delete evidence photo', err);
+      setReportError('Unable to remove one of the photos. Try again.');
+    } finally {
+      setReportEvidenceFiles((prev) => prev.filter((file) => file.path !== path));
+    }
   }, []);
 
   const handleReportSubmit = useCallback(async () => {
@@ -220,10 +313,7 @@ export default function DashboardOrders() {
       setReportError('Please describe what happened (at least 10 characters).');
       return;
     }
-    const evidenceList = reportEvidence
-      .split(/\n|,/)
-      .map((value) => value.trim())
-      .filter(Boolean);
+    const evidenceList = reportEvidenceFiles.map((file) => file.url);
     const { order, role } = reportTarget;
     const reportedUserId =
       role === 'buyer'
@@ -248,7 +338,7 @@ export default function DashboardOrders() {
         accessToken,
       });
       setReportMessage('Thanks. We recorded your report for review.');
-      resetReportForm();
+      resetReportForm({ keepUploads: true });
     } catch (err) {
       setReportError(err.message);
     } finally {
@@ -258,10 +348,12 @@ export default function DashboardOrders() {
     reportTarget,
     accessToken,
     reportDescription,
-    reportEvidence,
+    reportEvidenceFiles,
     reportCategory,
     resetReportForm,
   ]);
+
+  const evidenceRemaining = MAX_REPORT_EVIDENCE - reportEvidenceFiles.length;
 
   if (authLoading) {
     return (
@@ -361,15 +453,50 @@ export default function DashboardOrders() {
                     style={{ display: 'block', width: '100%', marginTop: '0.25rem' }}
                   />
                 </label>
-                <label>
-                  Evidence URLs (optional, comma or newline separated)
-                  <textarea
-                    value={reportEvidence}
-                    onChange={(event) => setReportEvidence(event.target.value)}
-                    rows={3}
-                    style={{ display: 'block', width: '100%', marginTop: '0.25rem' }}
-                  />
-                </label>
+                <div>
+                  <label style={{ display: 'block' }}>
+                    Evidence photos (optional, up to {MAX_REPORT_EVIDENCE})
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleEvidenceUpload}
+                      disabled={uploadingEvidence || evidenceRemaining <= 0}
+                      style={{ display: 'block', width: '100%', marginTop: '0.25rem' }}
+                    />
+                  </label>
+                  <small style={{ display: 'block', marginTop: '0.25rem' }}>
+                    {evidenceRemaining > 0
+                      ? `${evidenceRemaining} photo${evidenceRemaining === 1 ? '' : 's'} remaining`
+                      : 'Maximum uploads reached'}
+                  </small>
+                  {uploadingEvidence && <p>Uploading evidence…</p>}
+                  {reportEvidenceFiles.length > 0 && (
+                    <ul style={{ listStyle: 'none', padding: 0, marginTop: '0.5rem' }}>
+                      {reportEvidenceFiles.map((file) => (
+                        <li
+                          key={file.path}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            marginBottom: '0.5rem',
+                          }}
+                        >
+                          <img
+                            src={file.url}
+                            alt={file.name}
+                            style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: '0.4rem' }}
+                          />
+                          <span style={{ flex: 1, fontSize: '0.9rem' }}>{file.name}</span>
+                          <button type="button" onClick={() => handleEvidenceRemove(file.path)}>
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                   <button
                     type="button"
@@ -382,7 +509,7 @@ export default function DashboardOrders() {
                   <button
                     type="button"
                     className="listing-summary__button listing-summary__button--outline"
-                    onClick={resetReportForm}
+                    onClick={() => resetReportForm()}
                     disabled={reportSubmitting}
                   >
                     Cancel
