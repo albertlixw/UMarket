@@ -53,8 +53,18 @@ export default function Home() {
   const [previewError, setPreviewError] = useState(null);
   const { user } = useAuth();
   const router = useRouter();
-  const activeCategory =
-    typeof router.query.category === 'string' ? router.query.category.toLowerCase() : null;
+  const activeCategories = useMemo(() => {
+    const raw = router.query.category;
+    if (!raw) return [];
+    const values = Array.isArray(raw) ? raw : [raw];
+    const normalized = values
+      .flatMap((entry) => String(entry).split(','))
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean);
+    return Array.from(new Set(normalized));
+  }, [router.query.category]);
+  const activeCategorySet = useMemo(() => new Set(activeCategories), [activeCategories]);
+  const hasActiveCategories = activeCategories.length > 0;
 
   useEffect(() => {
     async function fetchListings() {
@@ -98,17 +108,18 @@ export default function Home() {
 
   const filteredListings = useMemo(() => {
     const base = searchTerm.trim() ? searchResults : listings;
-    if (!activeCategory) {
+    if (!hasActiveCategories) {
       return base;
     }
+    const matchSet = activeCategorySet;
     return base.filter((listing) => {
       const categoryValue =
         typeof listing.category === 'string' && listing.category
           ? listing.category.toLowerCase()
           : 'miscellaneous';
-      return categoryValue === activeCategory;
+      return matchSet.has(categoryValue);
     });
-  }, [activeCategory, listings, searchResults, searchTerm]);
+  }, [activeCategorySet, hasActiveCategories, listings, searchResults, searchTerm]);
 
   function getCategoryName(slug) {
     if (!slug) {
@@ -120,15 +131,22 @@ export default function Home() {
 
   function handleCategorySelect(slug) {
     const normalized = slug ? slug.toLowerCase() : null;
-    const isCurrentlyActive = normalized && normalized === activeCategory;
-    router.push(
-      {
-        pathname: '/',
-        query: isCurrentlyActive ? {} : normalized ? { category: normalized } : {},
-      },
-      undefined,
-      { shallow: true },
-    );
+    if (!normalized) {
+      router.push({ pathname: '/' }, undefined, { shallow: true });
+      return;
+    }
+    const next = new Set(activeCategories);
+    if (next.has(normalized)) {
+      next.delete(normalized);
+    } else {
+      next.add(normalized);
+    }
+    const query = next.size ? { category: Array.from(next).join(',') } : {};
+    router.push({ pathname: '/', query }, undefined, { shallow: true });
+  }
+
+  function clearCategories() {
+    router.push({ pathname: '/' }, undefined, { shallow: true });
   }
 
   function highlight(text) {
@@ -246,7 +264,7 @@ export default function Home() {
         <div className="category-grid">
           {CATEGORY_CARDS.map((category) => {
             const normalizedSlug = category.slug;
-            const isActive = activeCategory === normalizedSlug;
+            const isActive = activeCategorySet.has(normalizedSlug);
             return (
               <button
                 key={normalizedSlug}
@@ -274,15 +292,24 @@ export default function Home() {
             </Link>
           )}
         </div>
-        {activeCategory && (
+        {hasActiveCategories && (
           <div className="listing-filter-banner">
             <span>
-              Showing <strong>{getCategoryName(activeCategory)}</strong> listings.
+              Showing{' '}
+              <strong>
+                {activeCategories.map((slug, index) => (
+                  <span key={slug}>
+                    {getCategoryName(slug)}
+                    {index < activeCategories.length - 1 ? ', ' : ''}
+                  </span>
+                ))}
+              </strong>{' '}
+              listings.
             </span>
             <button
               type="button"
               className="listing-filter-banner__clear"
-              onClick={() => handleCategorySelect(null)}
+              onClick={clearCategories}
             >
               Clear filter
             </button>
@@ -292,7 +319,7 @@ export default function Home() {
         {previewError && <p style={{ color: 'var(--color-link)' }}>{previewError}</p>}
         {!loading && !searching && filteredListings.length === 0 && (
           <p>
-            {activeCategory
+            {hasActiveCategories
               ? 'No listings found in this category yet—check back soon!'
               : 'No listings found.'}
           </p>

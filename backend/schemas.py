@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Literal, Union, Annotated
+from typing import Optional, Literal, Union, Annotated, List
 
 from pydantic import BaseModel, Field
 
@@ -60,6 +60,9 @@ DecorType = Literal[
 ]
 TicketType = Literal["SPORT", "EVENTS", "MOVIES", "PERFORMANCE", "OTHER"]
 TransactionPaymentMethod = Literal["CASH", "STRIPE"]
+OrderStatus = Literal["pending_meetup", "buyer_confirmed", "seller_confirmed", "complete"]
+ReportCategory = Literal["NO_SHOW", "PAYMENT_ISSUE", "ITEM_NOT_AS_DESCRIBED", "SCAM", "OTHER"]
+ReportStatus = Literal["OPEN", "UNDER_REVIEW", "RESOLVED", "DISMISSED"]
 
 
 class CategoryDetailsBase(BaseModel):
@@ -221,6 +224,13 @@ class Order(BaseModel):
     )
     created_at: Optional[datetime] = None
     product: Optional[Listing] = None
+    buyer_confirmed: bool = Field(False, description="Buyer confirmed receiving the item")
+    seller_confirmed: bool = Field(False, description="Seller confirmed receiving payment")
+    buyer_confirmed_at: Optional[datetime] = None
+    seller_confirmed_at: Optional[datetime] = None
+    buyer_confirmation_notes: Optional[str] = Field(None, max_length=500)
+    seller_confirmation_notes: Optional[str] = Field(None, max_length=500)
+    status: OrderStatus = Field("pending_meetup", description="Derived transaction status")
 
     class Config:
         orm_mode = True
@@ -230,6 +240,67 @@ class OrderUpdate(BaseModel):
     payment_method: Optional[TransactionPaymentMethod] = Field(
         None, example="CASH", description="Preferred payment method"
     )
+
+
+class OrderConfirmation(BaseModel):
+    notes: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="Optional short note recorded with the confirmation",
+    )
+
+
+class ReportBase(BaseModel):
+    reported_user_id: str = Field(..., description="User being reported")
+    transaction_id: Optional[str] = Field(
+        None, description="Optional transaction involved in the report"
+    )
+    category: ReportCategory = Field(..., description="Type of issue encountered")
+    description: str = Field(
+        ...,
+        min_length=10,
+        max_length=2000,
+        description="Description of what happened",
+    )
+    evidence_urls: List[str] = Field(
+        default_factory=list,
+        description="Optional supporting evidence URLs",
+    )
+
+
+class ReportCreate(ReportBase):
+    pass
+
+
+class Report(ReportBase):
+    id: str
+    reporter_id: str
+    status: ReportStatus = Field("OPEN", description="Workflow status of the report")
+    resolution_notes: Optional[str] = Field(
+        None, description="Moderator notes when the report is resolved or dismissed"
+    )
+    resolved_by: Optional[str] = Field(None, description="Moderator who resolved the report")
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class ReportUpdate(BaseModel):
+    status: Optional[ReportStatus] = None
+    resolution_notes: Optional[str] = Field(
+        None, max_length=2000, description="Moderator notes about this report"
+    )
+    evidence_urls: Optional[List[str]] = None
+    description: Optional[str] = Field(
+        None, min_length=10, max_length=2000, description="Updated description from reporter"
+    )
+
+
+class MyReports(BaseModel):
+    filed: List[Report] = Field(default_factory=list)
+    against: List[Report] = Field(default_factory=list)
 
 
 class UserProfile(BaseModel):

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 import re
 from difflib import SequenceMatcher
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Body, Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +29,51 @@ app.add_middleware(
 )
 
 _http_bearer = HTTPBearer(auto_error=False)
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _normalize_note(note: Optional[str]) -> Optional[str]:
+    if note is None:
+        return None
+    text = note.strip()
+    return text or None
+
+
+def _order_or_404(order_id: str) -> Dict[str, Any]:
+    order = database.get_order(order_id)
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    return order
+
+
+def _report_or_404(report_id: str) -> Dict[str, Any]:
+    report = database.get_report(report_id)
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+    return report
+
+
+def _clean_text(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    text = value.strip()
+    return text or None
+
+
+def _sanitize_evidence_urls(values: Optional[List[str]]) -> List[str]:
+    if not values:
+        return []
+    cleaned: List[str] = []
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            cleaned.append(text)
+    return cleaned
 
 
 def get_current_user_id(credential: HTTPAuthorizationCredentials = Depends(_http_bearer)) -> str:
@@ -299,9 +345,7 @@ def update_order(
     payload: schemas.OrderUpdate,
     user_id: str = Depends(get_current_user_id),
 ):
-    order = database.get_order(order_id)
-    if not order:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    order = _order_or_404(order_id)
     product = order.get("product")
     if not product:
         product = database.get_listing(order.get("listing_id"))
@@ -316,6 +360,142 @@ def update_order(
     if not update_fields:
         return order
     updated = database.update_order(order_id, update_fields)
+    return updated
+
+
+@app.post("/orders/{order_id}/confirm-item", response_model=schemas.Order)
+def confirm_item_received(
+    order_id: str,
+    payload: schemas.OrderConfirmation = Body(default_factory=schemas.OrderConfirmation),
+    user_id: str = Depends(get_current_user_id),
+):
+    order = _order_or_404(order_id)
+    if order.get("buyer_id") != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the buyer can confirm receiving the item",
+        )
+    if order.get("buyer_confirmed"):
+        return order
+    update_fields: Dict[str, Any] = {
+        "buyer_confirmed": True,
+        "buyer_confirmed_at": _now_iso(),
+    }
+    note = _normalize_note(payload.notes) if payload else None
+    if note is not None:
+        update_fields["buyer_confirmation_notes"] = note
+    updated = database.update_order(order_id, update_fields)
+    return updated
+
+
+@app.post("/orders/{order_id}/confirm-payment", response_model=schemas.Order)
+def confirm_payment_received(
+    order_id: str,
+    payload: schemas.OrderConfirmation = Body(default_factory=schemas.OrderConfirmation),
+    user_id: str = Depends(get_current_user_id),
+):
+    order = _order_or_404(order_id)
+    seller_id = order.get("seller_id") or order.get("product", {}).get("seller_id")
+    if seller_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the seller can confirm receiving payment",
+        )
+    if order.get("seller_confirmed"):
+        return order
+    update_fields: Dict[str, Any] = {
+        "seller_confirmed": True,
+        "seller_confirmed_at": _now_iso(),
+    }
+    note = _normalize_note(payload.notes) if payload else None
+    if note is not None:
+        update_fields["seller_confirmation_notes"] = note
+    updated = database.update_order(order_id, update_fields)
+    return updated
+
+
+@app.get("/reports", response_model=schemas.MyReports)
+def list_my_reports(user_id: str = Depends(get_current_user_id)):
+    filed = database.get_reports({"reporter_id": user_id})
+    against = database.get_reports({"reported_user_id": user_id})
+    return {"filed": filed, "against": against}
+
+
+@app.post("/reports", response_model=schemas.Report, status_code=status.HTTP_201_CREATED)
+def create_report(
+    report: schemas.ReportCreate,
+    user_id: str = Depends(get_current_user_id),
+):
+    if report.reported_user_id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot report yourself",
+        )
+    target_profile = database.get_user_profile(report.reported_user_id)
+    if not target_profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reported user not found")
+    report_data = report.dict()
+    report_data["reporter_id"] = user_id
+    report_data["description"] = report.description.strip()
+    report_data["evidence_urls"] = _sanitize_evidence_urls(report.evidence_urls)
+    report_data["updated_at"] = _now_iso()
+    if report.transaction_id:
+        order = _order_or_404(report.transaction_id)
+        seller_id = order.get("seller_id") or order.get("product", {}).get("seller_id")
+        buyer_id = order.get("buyer_id")
+        participants = {buyer_id, seller_id}
+        if user_id not in participants:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not part of this transaction",
+            )
+        counterpart = buyer_id if user_id == seller_id else seller_id
+        if counterpart and counterpart != report.reported_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Reported user must be part of the provided transaction",
+            )
+    created = database.create_report(report_data)
+    return created
+
+
+@app.patch("/reports/{report_id}", response_model=schemas.Report)
+def update_report(
+    report_id: str,
+    payload: schemas.ReportUpdate,
+    user_id: str = Depends(get_current_user_id),
+):
+    existing = _report_or_404(report_id)
+    if existing.get("reporter_id") != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to update this report",
+        )
+    if existing.get("status") not in {"OPEN", "UNDER_REVIEW"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Closed reports cannot be updated",
+        )
+    update_fields: Dict[str, Any] = {}
+    if payload.description is not None:
+        text = _clean_text(payload.description)
+        if not text:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Description cannot be empty",
+            )
+        update_fields["description"] = text
+    if payload.evidence_urls is not None:
+        update_fields["evidence_urls"] = _sanitize_evidence_urls(payload.evidence_urls)
+    if payload.status is not None or payload.resolution_notes is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only moderators can update status or resolution notes",
+        )
+    if not update_fields:
+        return existing
+    update_fields["updated_at"] = _now_iso()
+    updated = database.update_report(report_id, update_fields)
     return updated
 
 

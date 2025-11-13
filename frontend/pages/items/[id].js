@@ -539,6 +539,14 @@ export default function ListingDetail() {
                 </span>
               </div>
             </div>
+            <div className="listing-summary__card listing-summary__card--onsite">
+              <h2 className="listing-summary__section-title">Pay in person</h2>
+              <p className="listing-summary__description">
+                UMarket doesn’t process payments. Coordinate a meetup, exchange the item and payment
+                in person, then have both the buyer and seller confirm the trade from their dashboard
+                to close the transaction.
+              </p>
+            </div>
             {(listing.description && listing.description.trim().length > 0) && (
               <div className="listing-summary__card listing-summary__card--description">
                 <h2 className="listing-summary__section-title">Description</h2>
@@ -598,6 +606,11 @@ export default function ListingDetail() {
                 {user ? (
                   canBuy ? (
                     <>
+                      <p className="listing-summary__note">
+                        Payment happens face-to-face when you meet the seller. Nothing is charged on
+                        UMarket—use the button below to let the seller know you want to buy and
+                        confirm the exchange afterwards.
+                      </p>
                       <label htmlFor="paymentMethod" className="listing-summary__form-control">
                         Preferred payment method
                         <select

@@ -11,7 +11,11 @@ SUPABASE_API_KEY: Optional[str] = os.environ.get("SUPABASE_API_KEY")
 PRODUCTS_TABLE: str = os.environ.get("SUPABASE_PRODUCTS_TABLE", "Product")
 PRODUCT_ID_FIELD: str = os.environ.get("SUPABASE_PRODUCT_ID_FIELD", "prod_id")
 TRANSACTIONS_TABLE: str = os.environ.get("SUPABASE_TRANSACTIONS_TABLE", "Transactions")
-TRANSACTION_ID_FIELD: str = os.environ.get("SUPABASE_TRANSACTION_ID_FIELD", "id")
+TRANSACTION_ID_FIELD: str = os.environ.get("SUPABASE_TRANSACTION_ID_FIELD") or PRODUCT_ID_FIELD
+PRODUCT_RELATION: str = os.environ.get(
+    "SUPABASE_PRODUCT_RELATION",
+    None,
+)
 AVATAR_BUCKET: str = os.environ.get("SUPABASE_AVATAR_BUCKET", "avatars")
 CLOTHING_TABLE: str = os.environ.get("SUPABASE_CLOTHING_TABLE", "Clothing")
 CLOTHING_ID_FIELD: str = os.environ.get("SUPABASE_CLOTHING_ID_FIELD", "clothing_id")
@@ -21,6 +25,8 @@ TICKETS_TABLE: str = os.environ.get("SUPABASE_TICKETS_TABLE", "Tickets")
 TICKETS_ID_FIELD: str = os.environ.get("SUPABASE_TICKETS_ID_FIELD", "tickets_id")
 MISC_TABLE: str = os.environ.get("SUPABASE_MISC_TABLE", "Miscellaneous")
 MISC_ID_FIELD: str = os.environ.get("SUPABASE_MISC_ID_FIELD", "misc_id")
+REPORTS_TABLE: str = os.environ.get("SUPABASE_REPORTS_TABLE", "user_reports")
+REPORT_ID_FIELD: str = os.environ.get("SUPABASE_REPORT_ID_FIELD", "id")
 
 
 def _ensure_config():
@@ -173,6 +179,25 @@ def _select_clause_with_details() -> str:
     return f"*,{','.join(relations)}"
 
 
+def _product_relationship() -> str:
+    if PRODUCT_RELATION:
+        return PRODUCT_RELATION
+    # fallback to the standard PostgREST naming pattern
+    return f"{PRODUCTS_TABLE}!Transactions_{PRODUCT_ID_FIELD}_fkey"
+
+
+def _apply_filters(params: Dict[str, Any], filters: Optional[Dict[str, Any]]) -> None:
+    if not filters:
+        return
+    for key, value in filters.items():
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            params[key] = f"eq.{str(value).lower()}"
+        else:
+            params[key] = f"eq.{value}"
+
+
 def _normalize_product(record: Dict[str, Any]) -> Dict[str, Any]:
     if not record:
         return record
@@ -220,9 +245,23 @@ def _normalize_product(record: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
+def _derive_order_status(order: Dict[str, Any]) -> str:
+    buyer_confirmed = bool(order.get("buyer_confirmed"))
+    seller_confirmed = bool(order.get("seller_confirmed"))
+    if buyer_confirmed and seller_confirmed:
+        return "complete"
+    if buyer_confirmed:
+        return "buyer_confirmed"
+    if seller_confirmed:
+        return "seller_confirmed"
+    return "pending_meetup"
+
+
 def _normalize_order(record: Dict[str, Any]) -> Dict[str, Any]:
     if not record:
         return record
+    if not isinstance(record, dict):
+        raise ValueError(f"Unexpected order payload type: {type(record)!r} -> {record}")
     normalized = dict(record)
     order_id = (
         normalized.get(TRANSACTION_ID_FIELD)
@@ -237,9 +276,35 @@ def _normalize_order(record: Dict[str, Any]) -> Dict[str, Any]:
         normalized["product"] = product_normalized
         if "seller_id" in product_normalized and not normalized.get("seller_id"):
             normalized["seller_id"] = product_normalized["seller_id"]
+    for flag in ("buyer_confirmed", "seller_confirmed"):
+        value = normalized.get(flag)
+        if isinstance(value, str):
+            normalized[flag] = value.strip().lower() in {"true", "t", "1"}
+        elif isinstance(value, (int, float)):
+            normalized[flag] = bool(value)
+        else:
+            normalized[flag] = bool(value)
+    normalized["status"] = _derive_order_status(normalized)
     prod_id = normalized.get("prod_id")
     if prod_id:
         normalized["listing_id"] = prod_id
+    return normalized
+
+
+def _normalize_report(record: Dict[str, Any]) -> Dict[str, Any]:
+    if not record:
+        return record
+    normalized = dict(record)
+    report_id = normalized.get(REPORT_ID_FIELD) or normalized.get("id")
+    if report_id:
+        normalized["id"] = report_id
+    evidence = normalized.get("evidence_urls")
+    if evidence is None:
+        normalized["evidence_urls"] = []
+    elif isinstance(evidence, str):
+        normalized["evidence_urls"] = [evidence]
+    elif not isinstance(evidence, list):
+        normalized["evidence_urls"] = list(evidence)
     return normalized
 
 
@@ -295,14 +360,7 @@ def get_listings(filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any
     _ensure_config()
     url = f"{SUPABASE_URL}/rest/v1/{PRODUCTS_TABLE}"
     params: Dict[str, Any] = {"select": _select_clause_with_details()}
-    if filters:
-        for key, value in filters.items():
-            if value is None:
-                continue
-            if isinstance(value, bool):
-                params[key] = f"eq.{str(value).lower()}"
-            else:
-                params[key] = f"eq.{value}"
+    _apply_filters(params, filters)
     resp = requests.get(url, headers=_headers(), params=params)
     resp.raise_for_status()
     data = resp.json()
@@ -431,7 +489,8 @@ def get_orders(filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]
     _ensure_config()
     url = f"{SUPABASE_URL}/rest/v1/{TRANSACTIONS_TABLE}"
     product_select = _select_clause_with_details()
-    params: Dict[str, Any] = {"select": f"*,product:{PRODUCT_ID_FIELD}({product_select})"}
+    product_relation = _product_relationship()
+    params: Dict[str, Any] = {"select": f"*,product:{product_relation}({product_select})"}
     if filters:
         for key, value in filters.items():
             if value is None:
@@ -443,6 +502,8 @@ def get_orders(filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]
     resp = requests.get(url, headers=_headers(), params=params)
     resp.raise_for_status()
     data = resp.json()
+    if isinstance(data, dict) and data.get("message"):
+        raise RuntimeError(f"Supabase error: {data}")
     return [_normalize_order(order) for order in data]
 
 
@@ -453,7 +514,7 @@ def create_order(order_data: Dict[str, Any]) -> Dict[str, Any]:
     headers = _headers()
     headers["Prefer"] = "return=representation"
     product_select = _select_clause_with_details()
-    params = {"select": f"*,product:{PRODUCT_ID_FIELD}({product_select})"}
+    params = {"select": f"*,product:{_product_relationship()}({product_select})"}
     resp = requests.post(url, headers=headers, params=params, json=order_data)
     resp.raise_for_status()
     created = resp.json()
@@ -467,12 +528,20 @@ def get_order(order_id: str) -> Optional[Dict[str, Any]]:
     product_select = _select_clause_with_details()
     params = {
         TRANSACTION_ID_FIELD: f"eq.{order_id}",
-        "select": f"*,product:{PRODUCT_ID_FIELD}({product_select})",
+        "select": f"*,product:{_product_relationship()}({product_select})",
     }
     resp = requests.get(url, headers=_headers(), params=params)
     resp.raise_for_status()
-    orders = resp.json()
-    return _normalize_order(orders[0]) if orders else None
+    data = resp.json()
+    if isinstance(data, dict):
+        if data.get("message") or data.get("code"):
+            raise RuntimeError(f"Supabase error: {data}")
+        if not data:
+            return None
+        return _normalize_order(data)
+    if not data:
+        return None
+    return _normalize_order(data[0])
 
 
 def update_order(order_id: str, order_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -484,7 +553,7 @@ def update_order(order_id: str, order_data: Dict[str, Any]) -> Dict[str, Any]:
     product_select = _select_clause_with_details()
     params = {
         TRANSACTION_ID_FIELD: f"eq.{order_id}",
-        "select": f"*,product:{PRODUCT_ID_FIELD}({product_select})",
+        "select": f"*,product:{_product_relationship()}({product_select})",
     }
     resp = requests.patch(
         url,
@@ -495,3 +564,54 @@ def update_order(order_id: str, order_data: Dict[str, Any]) -> Dict[str, Any]:
     resp.raise_for_status()
     updated = resp.json()
     return _normalize_order(updated[0])
+
+
+def get_reports(filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    _ensure_config()
+    url = f"{SUPABASE_URL}/rest/v1/{REPORTS_TABLE}"
+    params: Dict[str, Any] = {"select": "*", "order": "created_at.desc"}
+    _apply_filters(params, filters)
+    resp = requests.get(url, headers=_headers(), params=params)
+    resp.raise_for_status()
+    records = resp.json()
+    return [_normalize_report(record) for record in records]
+
+
+def get_report(report_id: str) -> Optional[Dict[str, Any]]:
+    _ensure_config()
+    url = f"{SUPABASE_URL}/rest/v1/{REPORTS_TABLE}"
+    params = {
+        REPORT_ID_FIELD: f"eq.{report_id}",
+        "select": "*",
+    }
+    resp = requests.get(url, headers=_headers(), params=params)
+    resp.raise_for_status()
+    records = resp.json()
+    return _normalize_report(records[0]) if records else None
+
+
+def create_report(report_data: Dict[str, Any]) -> Dict[str, Any]:
+    _ensure_config()
+    url = f"{SUPABASE_URL}/rest/v1/{REPORTS_TABLE}"
+    headers = _headers()
+    headers["Prefer"] = "return=representation"
+    params = {"select": "*"}
+    resp = requests.post(url, headers=headers, params=params, json=report_data)
+    resp.raise_for_status()
+    created = resp.json()
+    return _normalize_report(created[0])
+
+
+def update_report(report_id: str, report_data: Dict[str, Any]) -> Dict[str, Any]:
+    _ensure_config()
+    url = f"{SUPABASE_URL}/rest/v1/{REPORTS_TABLE}"
+    headers = _headers()
+    headers["Prefer"] = "return=representation"
+    params = {
+        REPORT_ID_FIELD: f"eq.{report_id}",
+        "select": "*",
+    }
+    resp = requests.patch(url, headers=headers, params=params, json=report_data)
+    resp.raise_for_status()
+    updated = resp.json()
+    return _normalize_report(updated[0])
