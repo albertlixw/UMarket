@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 import os
-import requests
 from typing import Any, Dict, List, Optional
+
+# NEW: load .env next to this file
+from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
+
+import requests
 
 SUPABASE_URL: Optional[str] = os.environ.get("SUPABASE_URL")
 SUPABASE_API_KEY: Optional[str] = os.environ.get("SUPABASE_API_KEY")
@@ -16,12 +22,13 @@ AVATAR_BUCKET: str = os.environ.get("SUPABASE_AVATAR_BUCKET", "avatars")
 
 
 def _ensure_config():
-    # make sure SUPABASE_URL and SUPABASE_API_KEY are set and raise RuntimeError if missing.
+    # Refresh from environment in case load happened later or server reloaded
+    global SUPABASE_URL, SUPABASE_API_KEY
     if not SUPABASE_URL or not SUPABASE_API_KEY:
-        raise RuntimeError(
-            "SUPABASE_URL and SUPABASE_API_KEY environment variables must be set"
-        )
-
+        SUPABASE_URL = (os.environ.get("SUPABASE_URL") or "").rstrip("/")
+        SUPABASE_API_KEY = os.environ.get("SUPABASE_API_KEY")
+    if not SUPABASE_URL or not SUPABASE_API_KEY:
+        raise RuntimeError("SUPABASE_URL and SUPABASE_API_KEY environment variables must be set")
 
 def _headers() -> Dict[str, str]:
     #construct headers for supabase REST requests
