@@ -17,8 +17,22 @@ SUPABASE_API_KEY: Optional[str] = os.environ.get("SUPABASE_API_KEY")
 PRODUCTS_TABLE: str = os.environ.get("SUPABASE_PRODUCTS_TABLE", "Product")
 PRODUCT_ID_FIELD: str = os.environ.get("SUPABASE_PRODUCT_ID_FIELD", "prod_id")
 TRANSACTIONS_TABLE: str = os.environ.get("SUPABASE_TRANSACTIONS_TABLE", "Transactions")
-TRANSACTION_ID_FIELD: str = os.environ.get("SUPABASE_TRANSACTION_ID_FIELD", "id")
+TRANSACTION_ID_FIELD: str = os.environ.get("SUPABASE_TRANSACTION_ID_FIELD") or PRODUCT_ID_FIELD
+PRODUCT_RELATION: str = os.environ.get(
+    "SUPABASE_PRODUCT_RELATION",
+    None,
+)
 AVATAR_BUCKET: str = os.environ.get("SUPABASE_AVATAR_BUCKET", "avatars")
+CLOTHING_TABLE: str = os.environ.get("SUPABASE_CLOTHING_TABLE", "Clothing")
+CLOTHING_ID_FIELD: str = os.environ.get("SUPABASE_CLOTHING_ID_FIELD", "clothing_id")
+DECOR_TABLE: str = os.environ.get("SUPABASE_DECOR_TABLE", "Decor")
+DECOR_ID_FIELD: str = os.environ.get("SUPABASE_DECOR_ID_FIELD", "decor_id")
+TICKETS_TABLE: str = os.environ.get("SUPABASE_TICKETS_TABLE", "Tickets")
+TICKETS_ID_FIELD: str = os.environ.get("SUPABASE_TICKETS_ID_FIELD", "tickets_id")
+MISC_TABLE: str = os.environ.get("SUPABASE_MISC_TABLE", "Miscellaneous")
+MISC_ID_FIELD: str = os.environ.get("SUPABASE_MISC_ID_FIELD", "misc_id")
+REPORTS_TABLE: str = os.environ.get("SUPABASE_REPORTS_TABLE", "user_reports")
+REPORT_ID_FIELD: str = os.environ.get("SUPABASE_REPORT_ID_FIELD", "id")
 
 
 def _ensure_config():
@@ -39,6 +53,156 @@ def _headers() -> Dict[str, str]:
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
+
+
+def _normalize_clothing_details(record: Dict[str, Any]) -> Dict[str, Any]:
+    details = dict(record)
+    used = details.get("used")
+    if isinstance(used, str):
+        details["used"] = used.lower() in {"true", "1"}
+    elif used is None:
+        details["used"] = False
+    gender = details.get("gender")
+    if isinstance(gender, str):
+        details["gender"] = gender.upper()
+    size = details.get("size")
+    if isinstance(size, str):
+        details["size"] = size.upper()
+    clothing_type = details.get("type")
+    if isinstance(clothing_type, str):
+        details["type"] = clothing_type.upper()
+    color = details.get("color")
+    if isinstance(color, str):
+        details["color"] = color.upper()
+    details["category"] = "clothing"
+    details.pop(CLOTHING_ID_FIELD, None)
+    return details
+
+
+def _normalize_decor_details(record: Dict[str, Any]) -> Dict[str, Any]:
+    details = dict(record)
+    used = details.get("used")
+    if isinstance(used, str):
+        details["used"] = used.lower() in {"true", "1"}
+    elif used is None:
+        details["used"] = False
+    decor_type = details.get("type")
+    if isinstance(decor_type, str):
+        details["type"] = decor_type.upper()
+    color = details.get("color")
+    if isinstance(color, str):
+        details["color"] = color.upper()
+    for key in ("length", "width", "height"):
+        value = details.get(key)
+        if isinstance(value, str):
+            try:
+                details[key] = int(value)
+            except ValueError:
+                details[key] = None
+    details["category"] = "decor"
+    details.pop(DECOR_ID_FIELD, None)
+    return details
+
+
+def _normalize_ticket_details(record: Dict[str, Any]) -> Dict[str, Any]:
+    details = dict(record)
+    ticket_type = details.get("type")
+    if isinstance(ticket_type, str):
+        details["type"] = ticket_type.upper()
+    details["category"] = "tickets"
+    details.pop(TICKETS_ID_FIELD, None)
+    return details
+
+
+def _build_clothing_payload(listing_id: str, details: Dict[str, Any]) -> Dict[str, Any]:
+    payload = {
+        CLOTHING_ID_FIELD: listing_id,
+        "gender": details.get("gender"),
+        "size": details.get("size"),
+        "type": details.get("type"),
+        "color": details.get("color"),
+        "used": bool(details.get("used", False)),
+    }
+    return payload
+
+
+def _build_decor_payload(listing_id: str, details: Dict[str, Any]) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        DECOR_ID_FIELD: listing_id,
+        "type": details.get("type"),
+        "color": details.get("color"),
+        "used": bool(details.get("used", False)),
+    }
+    for dimension in ("length", "width", "height"):
+        value = details.get(dimension)
+        if value is None or value == "":
+            payload[dimension] = None
+            continue
+        try:
+            payload[dimension] = int(value)
+        except (TypeError, ValueError):
+            payload[dimension] = None
+    return payload
+
+
+def _build_ticket_payload(listing_id: str, details: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        TICKETS_ID_FIELD: listing_id,
+        "type": details.get("type"),
+    }
+
+
+_CATEGORY_DETAIL_CONFIG: Dict[str, Dict[str, Any]] = {
+    "clothing": {
+        "table": CLOTHING_TABLE,
+        "id_field": CLOTHING_ID_FIELD,
+        "normalizer": _normalize_clothing_details,
+        "builder": _build_clothing_payload,
+    },
+    "decor": {
+        "table": DECOR_TABLE,
+        "id_field": DECOR_ID_FIELD,
+        "normalizer": _normalize_decor_details,
+        "builder": _build_decor_payload,
+    },
+    "tickets": {
+        "table": TICKETS_TABLE,
+        "id_field": TICKETS_ID_FIELD,
+        "normalizer": _normalize_ticket_details,
+        "builder": _build_ticket_payload,
+    },
+}
+
+
+def _select_clause_with_details() -> str:
+    relations = []
+    for config in _CATEGORY_DETAIL_CONFIG.values():
+        table = config.get("table")
+        if not table:
+            continue
+        relations.append(f'{table}(*)')
+    if not relations:
+        return "*"
+    return f"*,{','.join(relations)}"
+
+
+def _product_relationship() -> str:
+    if PRODUCT_RELATION:
+        return PRODUCT_RELATION
+    # fallback to the standard PostgREST naming pattern
+    return f"{PRODUCTS_TABLE}!Transactions_{PRODUCT_ID_FIELD}_fkey"
+
+
+def _apply_filters(params: Dict[str, Any], filters: Optional[Dict[str, Any]]) -> None:
+    if not filters:
+        return
+    for key, value in filters.items():
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            params[key] = f"eq.{str(value).lower()}"
+        else:
+            params[key] = f"eq.{value}"
 
 
 def _normalize_product(record: Dict[str, Any]) -> Dict[str, Any]:
@@ -67,14 +231,50 @@ def _normalize_product(record: Dict[str, Any]) -> Dict[str, Any]:
         normalized["category"] = category
     else:
         normalized["category"] = str(category)
+    description = normalized.get("description")
+    if description is None:
+        normalized["description"] = None
+    elif not isinstance(description, str):
+        normalized["description"] = str(description)
+    for config in _CATEGORY_DETAIL_CONFIG.values():
+        table = config.get("table")
+        if not table:
+            continue
+        raw_details = normalized.pop(table, None)
+        if not raw_details:
+            continue
+        if isinstance(raw_details, list):
+            raw_details = raw_details[0] if raw_details else None
+        if not raw_details:
+            continue
+        normalized["details"] = config["normalizer"](raw_details)
+        break
     return normalized
+
+
+def _derive_order_status(order: Dict[str, Any]) -> str:
+    buyer_confirmed = bool(order.get("buyer_confirmed"))
+    seller_confirmed = bool(order.get("seller_confirmed"))
+    if buyer_confirmed and seller_confirmed:
+        return "complete"
+    if buyer_confirmed:
+        return "buyer_confirmed"
+    if seller_confirmed:
+        return "seller_confirmed"
+    return "pending_meetup"
 
 
 def _normalize_order(record: Dict[str, Any]) -> Dict[str, Any]:
     if not record:
         return record
+    if not isinstance(record, dict):
+        raise ValueError(f"Unexpected order payload type: {type(record)!r} -> {record}")
     normalized = dict(record)
-    order_id = normalized.get(TRANSACTION_ID_FIELD) or normalized.get("id")
+    order_id = (
+        normalized.get(TRANSACTION_ID_FIELD)
+        or normalized.get("id")
+        or normalized.get("prod_id")
+    )
     if order_id:
         normalized["id"] = order_id
     product = normalized.get("product")
@@ -83,10 +283,82 @@ def _normalize_order(record: Dict[str, Any]) -> Dict[str, Any]:
         normalized["product"] = product_normalized
         if "seller_id" in product_normalized and not normalized.get("seller_id"):
             normalized["seller_id"] = product_normalized["seller_id"]
+    for flag in ("buyer_confirmed", "seller_confirmed"):
+        value = normalized.get(flag)
+        if isinstance(value, str):
+            normalized[flag] = value.strip().lower() in {"true", "t", "1"}
+        elif isinstance(value, (int, float)):
+            normalized[flag] = bool(value)
+        else:
+            normalized[flag] = bool(value)
+    normalized["status"] = _derive_order_status(normalized)
     prod_id = normalized.get("prod_id")
     if prod_id:
         normalized["listing_id"] = prod_id
     return normalized
+
+
+def _normalize_report(record: Dict[str, Any]) -> Dict[str, Any]:
+    if not record:
+        return record
+    normalized = dict(record)
+    report_id = normalized.get(REPORT_ID_FIELD) or normalized.get("id")
+    if report_id:
+        normalized["id"] = report_id
+    evidence = normalized.get("evidence_urls")
+    if evidence is None:
+        normalized["evidence_urls"] = []
+    elif isinstance(evidence, str):
+        normalized["evidence_urls"] = [evidence]
+    elif not isinstance(evidence, list):
+        normalized["evidence_urls"] = list(evidence)
+    return normalized
+
+
+def _upsert_category_detail(table: str, id_field: str, payload: Dict[str, Any]) -> None:
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    headers = _headers()
+    headers["Prefer"] = "resolution=merge-duplicates,return=representation"
+    params = {"on_conflict": id_field}
+    resp = requests.post(url, headers=headers, params=params, json=payload)
+    if not resp.ok:
+        print(f"SUPABASE UPSERT ERROR ({table}):", resp.status_code, resp.text)
+        resp.raise_for_status()
+
+
+def _delete_category_detail(table: str, id_field: str, listing_id: str) -> None:
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    resp = requests.delete(url, headers=_headers(), params={id_field: f"eq.{listing_id}"})
+    # 204 / 200 both acceptable, raise on actual error
+    if resp.status_code not in (200, 204):
+        resp.raise_for_status()
+
+
+def _sync_category_details(
+    listing_id: str, category: Optional[str], details: Optional[Dict[str, Any]]
+) -> None:
+    # make sure additional category tables stay in sync with the main Product row
+    target_category = category or ""
+    for slug, config in _CATEGORY_DETAIL_CONFIG.items():
+        table = config.get("table")
+        id_field = config.get("id_field")
+        builder = config.get("builder")
+        if not table or not id_field:
+            continue
+        if slug == target_category and details:
+            payload = builder(listing_id, details)
+            _upsert_category_detail(table, id_field, payload)
+        else:
+            _delete_category_detail(table, id_field, listing_id)
+
+
+def _delete_all_category_details(listing_id: str) -> None:
+    for config in _CATEGORY_DETAIL_CONFIG.values():
+        table = config.get("table")
+        id_field = config.get("id_field")
+        if not table or not id_field:
+            continue
+        _delete_category_detail(table, id_field, listing_id)
 
 
 def get_listings(filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
@@ -94,15 +366,8 @@ def get_listings(filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any
 
     _ensure_config()
     url = f"{SUPABASE_URL}/rest/v1/{PRODUCTS_TABLE}"
-    params: Dict[str, Any] = {"select": "*"}
-    if filters:
-        for key, value in filters.items():
-            if value is None:
-                continue
-            if isinstance(value, bool):
-                params[key] = f"eq.{str(value).lower()}"
-            else:
-                params[key] = f"eq.{value}"
+    params: Dict[str, Any] = {"select": _select_clause_with_details()}
+    _apply_filters(params, filters)
     resp = requests.get(url, headers=_headers(), params=params)
     resp.raise_for_status()
     data = resp.json()
@@ -114,14 +379,20 @@ def get_listing(listing_id: str) -> Optional[Dict[str, Any]]:
 
     _ensure_config()
     url = f"{SUPABASE_URL}/rest/v1/{PRODUCTS_TABLE}"
-    params = {PRODUCT_ID_FIELD: f"eq.{listing_id}", "select": "*"}
+    params = {
+        PRODUCT_ID_FIELD: f"eq.{listing_id}",
+        "select": _select_clause_with_details(),
+    }
     resp = requests.get(url, headers=_headers(), params=params)
     resp.raise_for_status()
     products = resp.json()
     return _normalize_product(products[0]) if products else None
 
 
-def create_listing(listing_data: Dict[str, Any]) -> Dict[str, Any]:
+def create_listing(
+    listing_data: Dict[str, Any],
+    details: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     # insert a new product and return the created record
 
     _ensure_config()
@@ -133,10 +404,23 @@ def create_listing(listing_data: Dict[str, Any]) -> Dict[str, Any]:
         print("SUPABASE INSERT ERROR:", resp.status_code, resp.text)
         resp.raise_for_status()
     created = resp.json()
-    return _normalize_product(created[0])
+    product = _normalize_product(created[0])
+    listing_id = product.get("id")
+    category = product.get("category")
+    if listing_id and (details is not None or category in _CATEGORY_DETAIL_CONFIG):
+        _sync_category_details(listing_id, category, details)
+        refreshed = get_listing(listing_id)
+        if refreshed:
+            return refreshed
+    return product
 
 
-def update_listing(listing_id: str, listing_data: Dict[str, Any]) -> Dict[str, Any]:
+def update_listing(
+    listing_id: str,
+    listing_data: Dict[str, Any],
+    category: Optional[str] = None,
+    details: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     # update an existing product and return the updated record
 
     _ensure_config()
@@ -151,13 +435,19 @@ def update_listing(listing_id: str, listing_data: Dict[str, Any]) -> Dict[str, A
     )
     resp.raise_for_status()
     updated = resp.json()
-    return _normalize_product(updated[0])
+    product = _normalize_product(updated[0])
+    final_category = category or product.get("category")
+    if details is not None or category is not None:
+        _sync_category_details(listing_id, final_category, details)
+    refreshed = get_listing(listing_id)
+    return refreshed or product
 
 
 def delete_listing(listing_id: str) -> bool:
     #delete a listing, and returns True on success
 
     _ensure_config()
+    _delete_all_category_details(listing_id)
     url = f"{SUPABASE_URL}/rest/v1/{PRODUCTS_TABLE}"
     resp = requests.delete(
         url, headers=_headers(), params={PRODUCT_ID_FIELD: f"eq.{listing_id}"}
@@ -205,7 +495,9 @@ def get_orders(filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]
 
     _ensure_config()
     url = f"{SUPABASE_URL}/rest/v1/{TRANSACTIONS_TABLE}"
-    params: Dict[str, Any] = {"select": f"*,product:{PRODUCT_ID_FIELD}(*)"}
+    product_select = _select_clause_with_details()
+    product_relation = _product_relationship()
+    params: Dict[str, Any] = {"select": f"*,product:{product_relation}({product_select})"}
     if filters:
         for key, value in filters.items():
             if value is None:
@@ -217,6 +509,8 @@ def get_orders(filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]
     resp = requests.get(url, headers=_headers(), params=params)
     resp.raise_for_status()
     data = resp.json()
+    if isinstance(data, dict) and data.get("message"):
+        raise RuntimeError(f"Supabase error: {data}")
     return [_normalize_order(order) for order in data]
 
 
@@ -226,7 +520,8 @@ def create_order(order_data: Dict[str, Any]) -> Dict[str, Any]:
     url = f"{SUPABASE_URL}/rest/v1/{TRANSACTIONS_TABLE}"
     headers = _headers()
     headers["Prefer"] = "return=representation"
-    params = {"select": f"*,product:{PRODUCT_ID_FIELD}(*)"}
+    product_select = _select_clause_with_details()
+    params = {"select": f"*,product:{_product_relationship()}({product_select})"}
     resp = requests.post(url, headers=headers, params=params, json=order_data)
     resp.raise_for_status()
     created = resp.json()
@@ -237,14 +532,23 @@ def get_order(order_id: str) -> Optional[Dict[str, Any]]:
     # return a single transaction by its id or None if it is not found
     _ensure_config()
     url = f"{SUPABASE_URL}/rest/v1/{TRANSACTIONS_TABLE}"
+    product_select = _select_clause_with_details()
     params = {
         TRANSACTION_ID_FIELD: f"eq.{order_id}",
-        "select": f"*,product:{PRODUCT_ID_FIELD}(*)",
+        "select": f"*,product:{_product_relationship()}({product_select})",
     }
     resp = requests.get(url, headers=_headers(), params=params)
     resp.raise_for_status()
-    orders = resp.json()
-    return _normalize_order(orders[0]) if orders else None
+    data = resp.json()
+    if isinstance(data, dict):
+        if data.get("message") or data.get("code"):
+            raise RuntimeError(f"Supabase error: {data}")
+        if not data:
+            return None
+        return _normalize_order(data)
+    if not data:
+        return None
+    return _normalize_order(data[0])
 
 
 def update_order(order_id: str, order_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -253,9 +557,10 @@ def update_order(order_id: str, order_data: Dict[str, Any]) -> Dict[str, Any]:
     url = f"{SUPABASE_URL}/rest/v1/{TRANSACTIONS_TABLE}"
     headers = _headers()
     headers["Prefer"] = "return=representation"
+    product_select = _select_clause_with_details()
     params = {
         TRANSACTION_ID_FIELD: f"eq.{order_id}",
-        "select": f"*,product:{PRODUCT_ID_FIELD}(*)",
+        "select": f"*,product:{_product_relationship()}({product_select})",
     }
     resp = requests.patch(
         url,
@@ -266,3 +571,54 @@ def update_order(order_id: str, order_data: Dict[str, Any]) -> Dict[str, Any]:
     resp.raise_for_status()
     updated = resp.json()
     return _normalize_order(updated[0])
+
+
+def get_reports(filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    _ensure_config()
+    url = f"{SUPABASE_URL}/rest/v1/{REPORTS_TABLE}"
+    params: Dict[str, Any] = {"select": "*", "order": "created_at.desc"}
+    _apply_filters(params, filters)
+    resp = requests.get(url, headers=_headers(), params=params)
+    resp.raise_for_status()
+    records = resp.json()
+    return [_normalize_report(record) for record in records]
+
+
+def get_report(report_id: str) -> Optional[Dict[str, Any]]:
+    _ensure_config()
+    url = f"{SUPABASE_URL}/rest/v1/{REPORTS_TABLE}"
+    params = {
+        REPORT_ID_FIELD: f"eq.{report_id}",
+        "select": "*",
+    }
+    resp = requests.get(url, headers=_headers(), params=params)
+    resp.raise_for_status()
+    records = resp.json()
+    return _normalize_report(records[0]) if records else None
+
+
+def create_report(report_data: Dict[str, Any]) -> Dict[str, Any]:
+    _ensure_config()
+    url = f"{SUPABASE_URL}/rest/v1/{REPORTS_TABLE}"
+    headers = _headers()
+    headers["Prefer"] = "return=representation"
+    params = {"select": "*"}
+    resp = requests.post(url, headers=headers, params=params, json=report_data)
+    resp.raise_for_status()
+    created = resp.json()
+    return _normalize_report(created[0])
+
+
+def update_report(report_id: str, report_data: Dict[str, Any]) -> Dict[str, Any]:
+    _ensure_config()
+    url = f"{SUPABASE_URL}/rest/v1/{REPORTS_TABLE}"
+    headers = _headers()
+    headers["Prefer"] = "return=representation"
+    params = {
+        REPORT_ID_FIELD: f"eq.{report_id}",
+        "select": "*",
+    }
+    resp = requests.patch(url, headers=headers, params=params, json=report_data)
+    resp.raise_for_status()
+    updated = resp.json()
+    return _normalize_report(updated[0])

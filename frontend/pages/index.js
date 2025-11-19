@@ -5,6 +5,7 @@ import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../utils/apiClient';
 import { fetchPrimaryImageMap } from '../utils/listingImages';
+import { CATEGORY_LABELS } from '../constants/categories';
 
 // home page with all available items. users can see listings
 
@@ -52,8 +53,18 @@ export default function Home() {
   const [previewError, setPreviewError] = useState(null);
   const { user } = useAuth();
   const router = useRouter();
-  const activeCategory =
-    typeof router.query.category === 'string' ? router.query.category.toLowerCase() : null;
+  const activeCategories = useMemo(() => {
+    const raw = router.query.category;
+    if (!raw) return [];
+    const values = Array.isArray(raw) ? raw : [raw];
+    const normalized = values
+      .flatMap((entry) => String(entry).split(','))
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean);
+    return Array.from(new Set(normalized));
+  }, [router.query.category]);
+  const activeCategorySet = useMemo(() => new Set(activeCategories), [activeCategories]);
+  const hasActiveCategories = activeCategories.length > 0;
 
   useEffect(() => {
     async function fetchListings() {
@@ -97,34 +108,45 @@ export default function Home() {
 
   const filteredListings = useMemo(() => {
     const base = searchTerm.trim() ? searchResults : listings;
-    if (!activeCategory) {
+    if (!hasActiveCategories) {
       return base;
     }
+    const matchSet = activeCategorySet;
     return base.filter((listing) => {
       const categoryValue =
         typeof listing.category === 'string' && listing.category
           ? listing.category.toLowerCase()
           : 'miscellaneous';
-      return categoryValue === activeCategory;
+      return matchSet.has(categoryValue);
     });
-  }, [activeCategory, listings, searchResults, searchTerm]);
+  }, [activeCategorySet, hasActiveCategories, listings, searchResults, searchTerm]);
 
   function getCategoryName(slug) {
-    const match = CATEGORY_CARDS.find((category) => category.slug === slug);
-    return match ? match.name : slug;
+    if (!slug) {
+      return 'Miscellaneous';
+    }
+    const normalized = String(slug).toLowerCase();
+    return CATEGORY_LABELS[normalized] || slug;
   }
 
   function handleCategorySelect(slug) {
     const normalized = slug ? slug.toLowerCase() : null;
-    const isCurrentlyActive = normalized && normalized === activeCategory;
-    router.push(
-      {
-        pathname: '/',
-        query: isCurrentlyActive ? {} : normalized ? { category: normalized } : {},
-      },
-      undefined,
-      { shallow: true },
-    );
+    if (!normalized) {
+      router.push({ pathname: '/' }, undefined, { shallow: true });
+      return;
+    }
+    const next = new Set(activeCategories);
+    if (next.has(normalized)) {
+      next.delete(normalized);
+    } else {
+      next.add(normalized);
+    }
+    const query = next.size ? { category: Array.from(next).join(',') } : {};
+    router.push({ pathname: '/', query }, undefined, { shallow: true });
+  }
+
+  function clearCategories() {
+    router.push({ pathname: '/' }, undefined, { shallow: true });
   }
 
   function highlight(text) {
@@ -240,19 +262,25 @@ export default function Home() {
           Jump straight to what you need with quick links to our most popular listing categories.
         </p>
         <div className="category-grid">
-          {CATEGORY_CARDS.map((category) => (
-            <Link
-              key={category.slug}
-              href={{ pathname: '/', query: { category: category.slug } }}
-              className={`category-card${
-                activeCategory === category.slug ? ' category-card--active' : ''
-              }`}
-              style={{ backgroundImage: category.backgroundImage }}
-            >
-              <span className="category-card__name">{category.name}</span>
-              <span className="category-card__cta">Explore listings</span>
-            </Link>
-          ))}
+          {CATEGORY_CARDS.map((category) => {
+            const normalizedSlug = category.slug;
+            const isActive = activeCategorySet.has(normalizedSlug);
+            return (
+              <button
+                key={normalizedSlug}
+                type="button"
+                onClick={() => handleCategorySelect(normalizedSlug)}
+                className={`category-card${isActive ? ' category-card--active' : ''}`}
+                style={{ backgroundImage: category.backgroundImage }}
+                aria-pressed={isActive}
+              >
+                <span className="category-card__name">{category.name}</span>
+                <span className="category-card__cta">
+                  {isActive ? 'Show all listings' : 'Explore listings'}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </section>
       <section className="home-listings">
@@ -264,21 +292,34 @@ export default function Home() {
             </Link>
           )}
         </div>
-        {activeCategory && (
+        {hasActiveCategories && (
           <div className="listing-filter-banner">
             <span>
-              Showing <strong>{getCategoryName(activeCategory)}</strong> listings.
+              Showing{' '}
+              <strong>
+                {activeCategories.map((slug, index) => (
+                  <span key={slug}>
+                    {getCategoryName(slug)}
+                    {index < activeCategories.length - 1 ? ', ' : ''}
+                  </span>
+                ))}
+              </strong>{' '}
+              listings.
             </span>
-            <Link href="/" className="listing-filter-banner__clear">
+            <button
+              type="button"
+              className="listing-filter-banner__clear"
+              onClick={clearCategories}
+            >
               Clear filter
-            </Link>
+            </button>
           </div>
         )}
         {loading && <p>Loading…</p>}
         {previewError && <p style={{ color: 'var(--color-link)' }}>{previewError}</p>}
         {!loading && !searching && filteredListings.length === 0 && (
           <p>
-            {activeCategory
+            {hasActiveCategories
               ? 'No listings found in this category yet—check back soon!'
               : 'No listings found.'}
           </p>
@@ -307,6 +348,12 @@ export default function Home() {
                 typeof listing.name === 'string' && listing.name.trim()
                   ? listing.name.trim().charAt(0).toUpperCase()
                   : categoryLabel.charAt(0).toUpperCase();
+              const rawDescription =
+                typeof listing.description === 'string' ? listing.description.trim() : '';
+              const shortenedDescription =
+                rawDescription.length > 0
+                  ? `${rawDescription.slice(0, 160)}${rawDescription.length > 160 ? '…' : ''}`
+                  : '';
 
               return (
                 <li
@@ -337,6 +384,11 @@ export default function Home() {
                       <p className="home-listings__meta">
                         Category: <strong>{categoryLabel}</strong>
                       </p>
+                      {shortenedDescription && (
+                        <p className="home-listings__summary">
+                          {hasActiveSearch ? highlight(shortenedDescription) : shortenedDescription}
+                        </p>
+                      )}
                       <p className="home-listings__meta">Quantity: {quantity}</p>
                     </div>
                     <Link href={`/items/${listing.id}`} className="home-listings__link">

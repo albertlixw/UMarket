@@ -470,6 +470,14 @@ select:focus-visible {
 .listing-filter-banner__clear {
   color: var(--color-link);
   font-weight: 600;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.listing-filter-banner__clear:hover {
+  color: var(--color-link-hover);
 }
 
 .home-listings {
@@ -746,6 +754,13 @@ select:focus-visible {
   color: var(--color-text-secondary);
   font-size: 0.9rem;
   margin: 0;
+}
+
+.home-listings__summary {
+  margin: 0.4rem 0 0;
+  font-size: 0.95rem;
+  color: var(--color-text-primary);
+  line-height: 1.5;
 }
 
 .home-listings__link {
@@ -1096,6 +1111,11 @@ select:focus-visible {
   font-size: 0.92rem;
 }
 
+.dashboard-listings__description {
+  color: var(--color-text-primary);
+  line-height: 1.5;
+}
+
 .dashboard-listings__meta strong {
   color: var(--color-text-primary);
 }
@@ -1301,7 +1321,8 @@ select:focus-visible {
 .listing-form__grid {
   display: grid;
   gap: 1rem 1.25rem;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  align-items: end;
 }
 
 .listing-form__field {
@@ -1316,20 +1337,37 @@ select:focus-visible {
 }
 
 .listing-form__field input,
-.listing-form__field select {
+.listing-form__field select,
+.listing-form__field textarea {
   border-radius: 12px;
   border: 1px solid var(--color-border);
   padding: 0.65rem 0.75rem;
   font-size: 1rem;
   background: var(--color-surface);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  resize: vertical;
+  width: 100%;
 }
 
 .listing-form__field input:focus,
-.listing-form__field select:focus {
+.listing-form__field select:focus,
+.listing-form__field textarea:focus {
   border-color: var(--color-link);
   box-shadow: 0 0 0 3px rgba(76, 110, 245, 0.15);
   outline: none;
+}
+
+.listing-form__field--textarea textarea {
+  min-height: 140px;
+  line-height: 1.5;
+}
+
+.listing-form__hint {
+  font-size: 0.85rem;
+  color: var(--color-text-tertiary);
+  text-align: right;
+  margin-top: 0.35rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .listing-form__field--checkbox {
@@ -1341,6 +1379,15 @@ select:focus-visible {
 .listing-form__field--checkbox input {
   width: auto;
   accent-color: var(--color-link);
+}
+
+.listing-form__field--full {
+  grid-column: 1 / -1;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  margin-top: 0.4rem;
 }
 
 .listing-form__section {
@@ -2305,6 +2352,13 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 0.3rem;
+}
+
+.listing-summary__description {
+  margin: 0;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
 
 .listing-summary__alert {

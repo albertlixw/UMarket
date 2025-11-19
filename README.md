@@ -19,8 +19,34 @@ implements a FastAPI backend and Next.js frontend.
 - **Purchase workflow:** Buyers record purchases for available items and choose a
   preferred payment method. Quantities decrement automatically and listings are marked
   sold when inventory reaches zero.
+- **In-person confirmations:** Because payments happen face-to-face, both the buyer and
+  seller confirm when they receive the item/payment so disputes have a clear audit trail.
+- **Issue reporting:** Buyers and sellers can file reports against each other with
+  descriptions/evidence directly from their Orders dashboard or chat, giving moderators a
+  single queue to review potential scams.
 - **Student profiles:** Sellers manage a public profile, including avatars stored in a Supabase
   Storage bucket and short bios shared on listing detail pages.
+
+## On-site payment confirmations
+
+- Listing detail pages now highlight that UMarket never handles funds; buyers always pay when they
+  meet the seller.
+- After a meetup, each side confirms their part of the exchange from **Dashboard → Transactions**.
+  Buyers click *Confirm I received the item* (POST `/orders/{id}/confirm-item`) and sellers click
+  *Confirm I was paid* (POST `/orders/{id}/confirm-payment`). Once both buttons are pressed the
+  transaction is marked complete.
+- Every confirmation records timestamps (and optional notes via the API) in `public."Transactions"`,
+  giving support staff an audit trail if a dispute is reported.
+
+## Reporting issues
+
+- Every order entry now includes a **Report buyer/seller** button that opens a short form asking for
+  a category, description, and optional evidence photos (up to five images uploaded to Supabase
+  Storage). Reports can optionally point to the exact transaction involved.
+- The backend persists reports in `public.user_reports` with a simple status workflow (open,
+  under review, resolved, dismissed). Reporters can add more detail while the report stays open.
+- Students can review their submitted reports at the bottom of **Dashboard → Orders** so they can
+  monitor statuses and share follow-up info with moderators if needed.
 
 ## Project structure
 
@@ -126,7 +152,18 @@ umarket/
      for insert with check (auth.uid() = buyer_id);
    ```
 
-4. **Create the `restrict_signup_to_umass` function** in Supabase:
+4. **Add the buyer/seller confirmation columns** by running the SQL in
+   `backend/sql/001_add_transaction_confirmations.sql` inside the Supabase SQL editor.
+   This migration adds the `buyer_confirmed`, `seller_confirmed`, and timestamp/note columns
+   that the API and dashboard expect.
+5. **Create the reporting table** by executing `backend/sql/002_create_user_reports.sql`. This
+   introduces the `user_reports` table plus indexes so buyers/sellers can flag suspicious activity.
+6. **Create a public storage bucket for report evidence**:
+   - Navigate to **Storage → Buckets** and create a bucket named `report-evidence` (or match the value
+     you plan to set in `NEXT_PUBLIC_SUPABASE_REPORT_BUCKET` / `SUPABASE_REPORT_BUCKET`).
+   - Make it **public** so the URLs can be shared with moderators.
+   - Add a policy that lets authenticated users upload files within a folder prefixed by their UID.
+7. **Create the `restrict_signup_to_umass` function** in Supabase:
 
    ```sql
    create or replace function public.restrict_signup_to_umass(event jsonb)
@@ -152,7 +189,7 @@ umarket/
 
    Afterwards, enable a Before User Created hook using this function via
    **Authentication → Configuration → Auth Hooks (Beta)**.
-5. **Set up the avatars storage bucket**:
+8. **Set up the avatars storage bucket**:
    - Go to **Storage → Buckets** and create a bucket named `avatars` (or any name you prefer).
    - Mark the bucket as **public** so listing pages can display profile photos.
    - In **Policies**, allow authenticated users to upload/update files within their folder scope.
@@ -169,6 +206,13 @@ umarket/
    # Edit backend/.env and set SUPABASE_URL, SUPABASE_API_KEY, SUPABASE_JWT_SECRET, FRONTEND_URLS
    ```
 
+  Windows(Git Bash):
+  ```bash
+  cd backend
+  source venv/Scripts/activate
+  python3 -m pip install -r requirements.txt
+  uvicorn main:app --reload --env-file backend/.env
+
    Windows (PowerShell):
    ```powershell
    Copy-Item backend/.env.example backend/.env
@@ -177,9 +221,11 @@ umarket/
 
    If your Supabase tables use different names or primary key columns, you can
    override the defaults by setting `SUPABASE_PRODUCTS_TABLE`,
-   `SUPABASE_PRODUCT_ID_FIELD`, `SUPABASE_TRANSACTIONS_TABLE`, or
-   `SUPABASE_TRANSACTION_ID_FIELD` in `backend/.env`. Set `SUPABASE_AVATAR_BUCKET`
-   if you created a storage bucket name that differs from `avatars`.
+   `SUPABASE_PRODUCT_ID_FIELD`, `SUPABASE_TRANSACTIONS_TABLE`,
+   `SUPABASE_TRANSACTION_ID_FIELD`, or `SUPABASE_PRODUCT_RELATION` (to point at a
+   renamed FK) in `backend/.env`. Set `SUPABASE_AVATAR_BUCKET` if you use a different
+   avatar bucket, and update `NEXT_PUBLIC_SUPABASE_REPORT_BUCKET` in the frontend
+   when you rename the evidence bucket.
 
 2. Install dependencies and start the server (requires Python 3.10+):
 
