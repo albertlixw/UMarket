@@ -1415,6 +1415,54 @@ select:focus-visible {
   box-shadow: var(--shadow-cta);
 }
 
+.listing-form__field--categories {
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.listing-form__categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.listing-form__category-option {
+  display: flex;
+  align-items: center;
+  padding: 0.4rem 0.7rem;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.listing-form__category-option input[type="checkbox"] {
+  margin-right: 0.5rem;
+  accent-color: var(--color-link);
+}
+
+.listing-form__category-option input[type="checkbox"]:checked + span {
+  font-weight: 600;
+  color: var(--color-link);
+  border-color: var(--color-link);
+  background-color: rgba(76, 110, 245, 0.1);
+}
+
+@media (max-width: 768px) {
+  .listing-form__categories {
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .listing-form__category-option {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
 .listing-photos {
   display: flex;
   flex-direction: column;

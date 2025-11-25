@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState} from 'react';
 import {
   CATEGORY_OPTIONS,
   COLOR_OPTIONS,
@@ -47,22 +47,28 @@ export default function ListingForm({
     ...DEFAULT_VALUES,
     ...normalizeInitial(initialValues),
   }));
+  const [selectedCategories, setSelectedCategories]=useState(
+    ()=> (initialValues?.category ? [initialValues.category]: [])
+  );
   const [localError, setLocalError] = useState(null);
-
   useEffect(() => {
     setValues({
       ...DEFAULT_VALUES,
       ...normalizeInitial(initialValues),
     });
+    setSelectedCategories(initialValues?.category ? [initialValues.category]: []);
   }, [initialValues]);
-
   function handleChange(field, value) {
     if (field === 'category') {
-      setValues((prev) => ({
-        ...prev,
-        ...CATEGORY_FIELD_DEFAULTS,
-        category: value,
-      }));
+      //setValues((prev) => ({
+       // ...prev,
+       // ...CATEGORY_FIELD_DEFAULTS,
+        //category: value,
+      //}));
+      //return;
+      setSelectedCategories((prev)=>
+        prev.includes(value)? prev.filter((v) => v!== value): [...prev, value]
+      );
       return;
     }
     setValues((prev) => ({
@@ -103,21 +109,22 @@ export default function ListingForm({
       description: trimmedDescription,
       price: parsedPrice,
       quantity: parsedQuantity,
-      category: selectedCategory,
+      categories: selectedCategories,
     };
 
     if (allowSoldToggle) {
       payload.sold = Boolean(values.sold);
     }
 
-    const categoryDetails = buildCategoryDetails(values, selectedCategory, setLocalError);
-    if (categoryDetails === false) {
-      return;
+    if(selectedCategories.length ===1){
+      const categoryDetails = buildCategoryDetails(values, selectedCategory, setLocalError);
+      if (categoryDetails === false) {
+        return;
+      }
+      if (categoryDetails) {
+        payload.details = categoryDetails;
+      }
     }
-    if (categoryDetails) {
-      payload.details = categoryDetails;
-    }
-
     await onSubmit(payload);
   }
 
@@ -161,21 +168,21 @@ export default function ListingForm({
             placeholder="1"
           />
         </div>
-        <div className="listing-form__field">
-          <label htmlFor="category">Category</label>
-          <select
-            id="category"
-            value={values.category}
-            onChange={(event) => handleChange('category', event.target.value)}
-            required
-          >
-            <option value="">Select a category</option>
+        <div className="listing-form__field listing-form__field--categories">
+          <label>Categories</label>
+          <div className="listing-form__categories">
             {CATEGORY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
+              <label key={option.value} className="listing-form__category-option">
+                <input
+                  type="checkbox"
+                  value={option.value}
+                  checked={selectedCategories.includes(option.value)}
+                  onChange={() => handleChange('category', option.value)}
+                />
                 {option.label}
-              </option>
+              </label>
             ))}
-          </select>
+          </div>
         </div>
         <div className="listing-form__field listing-form__field--textarea listing-form__field--full">
           <label htmlFor="description">Description</label>
@@ -205,7 +212,9 @@ export default function ListingForm({
           </div>
         )}
       </div>
-      <CategorySpecificFields values={values} onChange={handleChange} />
+      {selectedCategories.length === 1 && (
+        <CategorySpecificFields values={values} onChange={handleChange} />
+      )}
       {children && <div className="listing-form__section">{children}</div>}
       {(localError || error) && <p className="listing-form__error">{localError || error}</p>}
       <div className="listing-form__footer">
