@@ -13,7 +13,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from fastapi.middleware.cors import CORSMiddleware
 
-import database, schemas
+from backend import database, schemas
 
 MAX_REPORT_EVIDENCE = 5
 
