@@ -211,7 +211,7 @@ umarket/
   cd backend
   source venv/Scripts/activate
   python3 -m pip install -r requirements.txt
-  uvicorn main:app --reload --env-file backend/.env
+  uvicorn main:app --reload --env-file .env
 
    Windows (PowerShell):
    ```powershell
