@@ -1093,6 +1093,16 @@ select:focus-visible {
   color: var(--color-badge-sold-text);
 }
 
+.dashboard-listings__badge--pending {
+  background: var(--color-badge-available-bg);
+  color: var(--color-badge-available-text);
+}
+
+.dashboard-listings__badge--closed {
+  background: var(--color-badge-sold-bg);
+  color: var(--color-badge-sold-text);
+}
+
 .dashboard-listings__price {
   margin: 0;
   font-size: 1.1rem;

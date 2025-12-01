@@ -7,18 +7,10 @@ import { apiFetch } from '../../utils/apiClient';
 import { PAYMENT_METHOD_LABELS } from '../../constants/categories';
 import { REPORT_CATEGORIES, REPORT_CATEGORY_LABELS, REPORT_STATUS_LABELS } from '../../constants/reports';
 import { supabase } from '../../utils/supabaseClient';
-//yes
+
 
 const REPORT_EVIDENCE_BUCKET = process.env.NEXT_PUBLIC_SUPABASE_REPORT_BUCKET || 'report-evidence';
 const MAX_REPORT_EVIDENCE = 5;
-
-const STATUS_TEXT = {
-  pending_meetup: 'Waiting for the meetup to happen',
-  buyer_confirmed: 'Buyer confirmed receiving the item – waiting on seller',
-  seller_confirmed: 'Seller confirmed receiving payment – waiting on buyer',
-  complete: 'Both confirmed – transaction closed',
-};
-
 function deriveStatus(order) {
   if (order.buyer_confirmed && order.seller_confirmed) {
     return 'complete';
@@ -43,69 +35,104 @@ function formatDate(value) {
 
 function OrderList({ title, orders, emptyMessage, role, onConfirm, confirmingMap, onReport }) {
   return (
-    <section style={{ marginBottom: '2rem' }}>
+    <section className="dashboard-listings" style={{ marginBottom: '2rem' }}>
       <h2>{title}</h2>
+
       {orders.length === 0 ? (
         <p>{emptyMessage}</p>
       ) : (
-        <ul>
+        <ul className="dashboard-listings__grid">
           {orders.map((order) => {
-            const product = order.product;
+            const product = order.product || {};
+
+            // Ensure we never render placeholder/seed values that aren't real names
+            const rawName = typeof product.name === 'string' ? product.name.trim() : '';
+            const itemTitle = rawName || 'Untitled item';
+
+            const price =
+              typeof product.price === 'number' ? `$${product.price.toFixed(2)}` : 'Not set';
+
             const paymentLabel = order.payment_method
               ? PAYMENT_METHOD_LABELS[order.payment_method] || order.payment_method
               : 'Not provided';
+
             const statusKey = order.status || deriveStatus(order);
-            const statusText = STATUS_TEXT[statusKey] || STATUS_TEXT.pending_meetup;
-            const buyerConfirmedAt = formatDate(order.buyer_confirmed_at);
-            const sellerConfirmedAt = formatDate(order.seller_confirmed_at);
-            const isBuyerList = role === 'buyer';
-            const awaitingConfirmation = isBuyerList ? !order.buyer_confirmed : !order.seller_confirmed;
-            const confirmLabel = isBuyerList ? 'Confirm I received the item' : 'Confirm I was paid';
+            const isClosed = statusKey === 'complete';
+            const statusLabel = isClosed ? 'Closed' : 'Pending';
+
+            const buyerConfirmed = formatDate(order.buyer_confirmed_at) || '-';
+            const sellerConfirmed = formatDate(order.seller_confirmed_at) || '-';
+            const createdAt = formatDate(order.created_at) || '-';
+
+            const isBuyer = role === 'buyer';
+            const hasConfirmed = isBuyer ? !!order.buyer_confirmed : !!order.seller_confirmed;
+            const confirmLabel = isBuyer ? 'Confirm I received the item' : 'Confirm I was paid';
             const isConfirming = Boolean(confirmingMap?.[order.id]);
+
             return (
-              <li key={order.id} style={{ marginBottom: '1rem' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                  <strong>{product?.name || `Listing #${order.listing_id}`}</strong>
-                  {typeof product?.price === 'number' && (
-                    <span>Price: ${product.price.toFixed(2)}</span>
-                  )}
-                  <span>Payment method: {paymentLabel}</span>
-                  {order.created_at && (
-                    <span>Created: {new Date(order.created_at).toLocaleString()}</span>
-                  )}
-                  <span>
-                    <strong>Status:</strong> {statusText}
+              <li key={order.id} className="dashboard-listings__card">
+                {/* HEADER: item name + status */}
+                <div className="dashboard-listings__card-header">
+                  <h3>{itemTitle}</h3>
+                  <span
+                    className={`dashboard-listings__badge ${
+                      isClosed
+                        ? 'dashboard-listings__badge--closed'
+                        : 'dashboard-listings__badge--pending'
+                    }`}
+                  >
+                    {statusLabel}
                   </span>
-                  {buyerConfirmedAt && (
-                    <span>Buyer confirmed receipt on {buyerConfirmedAt}</span>
-                  )}
-                  {sellerConfirmedAt && (
-                    <span>Seller confirmed payment on {sellerConfirmedAt}</span>
-                  )}
-                  {awaitingConfirmation && onConfirm && (
-                    <button
-                      type="button"
-                      onClick={() => onConfirm(order.id)}
-                      disabled={isConfirming}
-                      style={{ alignSelf: 'flex-start', marginTop: '0.5rem' }}
-                    >
-                      {isConfirming ? 'Confirming…' : confirmLabel}
-                    </button>
-                  )}
-                  {onReport && (
-                    <button
-                      type="button"
-                      onClick={() => onReport(order, role)}
-                      style={{
-                        alignSelf: 'flex-start',
-                        marginTop: '0.25rem',
-                        color: '#b00020',
-                      }}
-                    >
-                      Report {isBuyerList ? 'seller' : 'buyer'}
-                    </button>
-                  )}
-                  <Link href={`/items/${order.listing_id}`}>View listing</Link>
+                </div>
+
+                {/* PRICE */}
+                <p className="dashboard-listings__price">{price}</p>
+
+                {/* META INFO */}
+                <ul className="dashboard-listings__meta">
+                  <li>
+                    Item: <strong>{itemTitle}</strong>
+                  </li>
+                  <li>
+                    Payment: <strong>{paymentLabel}</strong>
+                  </li>
+                  <li>
+                    Ordered: <strong>{createdAt}</strong>
+                  </li>
+                  <li>
+                    Buyer confirmed: <strong>{buyerConfirmed}</strong>
+                  </li>
+                  <li>
+                    Seller confirmed: <strong>{sellerConfirmed}</strong>
+                  </li>
+                </ul>
+
+                {/* ACTIONS */}
+                <div className="dashboard-listings__card-actions">
+                  <Link
+                    href={`/items/${order.listing_id}`}
+                    className="dashboard-listings__link"
+                  >
+                    View listing
+                  </Link>
+
+                  <button
+                    className="dashboard-listings__link dashboard-listings__link--muted"
+                    disabled={isConfirming || hasConfirmed}
+                    onClick={() => onConfirm(order.id)}
+                    type="button"
+                  >
+                    {hasConfirmed ? 'Confirmed' : isConfirming ? 'Saving…' : confirmLabel}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="dashboard-listings__link dashboard-listings__link--muted"
+                    style={{ color: '#b00020' }}
+                    onClick={() => onReport(order, role)}
+                  >
+                    Report {isBuyer ? 'seller' : 'buyer'}
+                  </button>
                 </div>
               </li>
             );
