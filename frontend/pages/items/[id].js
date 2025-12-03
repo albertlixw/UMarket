@@ -547,27 +547,6 @@ export default function ListingDetail() {
                 to close the transaction.
               </p>
             </div>
-            {(listing.description && listing.description.trim().length > 0) && (
-              <div className="listing-summary__card listing-summary__card--description">
-                <h2 className="listing-summary__section-title">Description</h2>
-                <p className="listing-summary__description">
-                  {listing.description.trim()}
-                </p>
-              </div>
-            )}
-            {detailEntries.length > 0 && (
-              <div className="listing-summary__card listing-summary__card--details">
-                <h2 className="listing-summary__section-title">Item details</h2>
-                <div className="listing-summary__meta">
-                  {detailEntries.map((entry) => (
-                    <span key={entry.label} className="listing-summary__meta-item">
-                      <strong>{entry.label}:</strong> {entry.value}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {message && (
               <p className="listing-summary__alert listing-summary__alert--success">{message}</p>
             )}
@@ -576,7 +555,6 @@ export default function ListingDetail() {
                 {orderError || error || chatError}
               </p>
             )}
-
             {isOwner ? (
               <div className="listing-summary__card listing-summary__card--owner">
                 <div className="listing-summary__actions listing-summary__actions--owner">
@@ -660,9 +638,30 @@ export default function ListingDetail() {
                   )
                 ) : (
                   <p className="listing-summary__note">
-                    <Link href="/login">Sign in</Link> to connect with the seller.
+                    <Link href={`/login?redirect=/items/${listing.id}`}>Sign in</Link> to connect with
+                    the seller.
                   </p>
                 )}
+              </div>
+            )}
+            {(listing.description && listing.description.trim().length > 0) && (
+              <div className="listing-summary__card listing-summary__card--description">
+                <h2 className="listing-summary__section-title">Description</h2>
+                <p className="listing-summary__description">
+                  {listing.description.trim()}
+                </p>
+              </div>
+            )}
+            {detailEntries.length > 0 && (
+              <div className="listing-summary__card listing-summary__card--details">
+                <h2 className="listing-summary__section-title">Item details</h2>
+                <div className="listing-summary__meta">
+                  {detailEntries.map((entry) => (
+                    <span key={entry.label} className="listing-summary__meta-item">
+                      <strong>{entry.label}:</strong> {entry.value}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
 

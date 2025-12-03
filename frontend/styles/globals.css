@@ -684,7 +684,8 @@ select:focus-visible {
   margin: 0;
   display: grid;
   gap: 1.25rem;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 320px));
+  justify-content: flex-start;
 }
 
 .home-listings__item {
@@ -696,6 +697,7 @@ select:focus-visible {
   flex-direction: column;
   gap: 0.6rem;
   transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.25s ease;
+  max-width: 320px;
 }
 
 .home-listings__details {
@@ -1191,13 +1193,21 @@ select:focus-visible {
   color: var(--color-text-secondary);
 }
 
+
 .dashboard-listings__grid {
   list-style: none;
   padding: 0;
   margin: 0;
   display: grid;
   gap: 1.25rem;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 640px) {
+  .dashboard-listings__grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    justify-content: stretch;
+  }
 }
 
 .dashboard-listings__card {
@@ -1491,8 +1501,14 @@ select:focus-visible {
 .listing-form__grid {
   display: grid;
   gap: 1rem 1.25rem;
-  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  grid-template-columns: repeat(3, minmax(200px, 1fr));
   align-items: end;
+}
+
+@media (max-width: 960px) {
+  .listing-form__grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
 }
 
 .listing-form__field {
@@ -1587,49 +1603,92 @@ select:focus-visible {
 
 .listing-form__field--categories {
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.85rem;
   margin-bottom: 1rem;
+  grid-column: 1 / -1;
 }
 
 .listing-form__categories {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
 }
 
 .listing-form__category-option {
+  position: relative;
   display: flex;
   align-items: center;
-  padding: 0.4rem 0.7rem;
-  border-radius: 12px;
+  gap: 0.7rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 15px;
   border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  background-color: rgba(15, 23, 42, 0.85);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   cursor: pointer;
-  font-size: 0.95rem;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease;
+  min-height: 70px;
+  overflow: hidden;
 }
 
-.listing-form__category-option input[type="checkbox"] {
-  margin-right: 0.5rem;
-  accent-color: var(--color-link);
+.listing-form__category-option:hover {
+  transform: translateY(-2px);
+  border-color: rgba(76, 110, 245, 0.45);
 }
 
-.listing-form__category-option input[type="checkbox"]:checked + span {
-  font-weight: 600;
-  color: var(--color-link);
+.listing-form__category-option:focus-within {
+  box-shadow: 0 0 0 3px rgba(76, 110, 245, 0.25);
   border-color: var(--color-link);
-  background-color: rgba(76, 110, 245, 0.1);
+}
+
+.listing-form__category-option input[type="radio"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.listing-form__category-accent {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  flex: none;
+  background: var(--color-link);
+  opacity: 0.65;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.listing-form__category-label {
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.listing-form__category-option--selected {
+  border-color: var(--color-link);
+  box-shadow: 0 12px 32px rgba(15, 30, 67, 0.45);
+}
+
+.listing-form__category-option--selected .listing-form__category-label {
+  color: var(--color-link);
+}
+
+.listing-form__category-option--selected .listing-form__category-accent {
+  opacity: 1;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
 }
 
 @media (max-width: 768px) {
   .listing-form__categories {
-    flex-direction: column;
-    gap: 0.4rem;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.6rem;
   }
 
   .listing-form__category-option {
-    width: 100%;
-    justify-content: flex-start;
+    min-height: 0;
+    padding: 0.75rem;
   }
 }
 

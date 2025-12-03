@@ -34,6 +34,27 @@ const DEFAULT_VALUES = {
   ...CATEGORY_FIELD_DEFAULTS,
 };
 
+const DEFAULT_CATEGORY_OVERLAY = '155deg, rgba(2, 6, 23, 0.85), rgba(8, 24, 68, 0.92)';
+const CATEGORY_ACCENT_COLOR = '#9ca3af';
+
+const CATEGORY_CARD_DETAILS = {
+  decor: {
+    image: 'https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=800&q=60',
+  },
+  clothing: {
+    image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=60',
+  },
+  'school-supplies': {
+    image: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=800&q=60',
+  },
+  tickets: {
+    image: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=60',
+  },
+  miscellaneous: {
+    image: 'https://images.unsplash.com/photo-1514996937319-344454492b37?auto=format&fit=crop&w=800&q=60',
+  },
+};
+
 export default function ListingForm({
   initialValues,
   onSubmit,
@@ -47,28 +68,20 @@ export default function ListingForm({
     ...DEFAULT_VALUES,
     ...normalizeInitial(initialValues),
   }));
-  const [selectedCategories, setSelectedCategories]=useState(
-    ()=> (initialValues?.category ? [initialValues.category]: [])
-  );
   const [localError, setLocalError] = useState(null);
   useEffect(() => {
     setValues({
       ...DEFAULT_VALUES,
       ...normalizeInitial(initialValues),
     });
-    setSelectedCategories(initialValues?.category ? [initialValues.category]: []);
   }, [initialValues]);
   function handleChange(field, value) {
     if (field === 'category') {
-      //setValues((prev) => ({
-       // ...prev,
-       // ...CATEGORY_FIELD_DEFAULTS,
-        //category: value,
-      //}));
-      //return;
-      setSelectedCategories((prev)=>
-        prev.includes(value)? prev.filter((v) => v!== value): [...prev, value]
-      );
+      setValues((prev) => ({
+        ...prev,
+        ...CATEGORY_FIELD_DEFAULTS,
+        category: value,
+      }));
       return;
     }
     setValues((prev) => ({
@@ -109,21 +122,19 @@ export default function ListingForm({
       description: trimmedDescription,
       price: parsedPrice,
       quantity: parsedQuantity,
-      categories: selectedCategories,
+      category: selectedCategory,
     };
 
     if (allowSoldToggle) {
       payload.sold = Boolean(values.sold);
     }
 
-    if(selectedCategories.length ===1){
-      const categoryDetails = buildCategoryDetails(values, selectedCategory, setLocalError);
-      if (categoryDetails === false) {
-        return;
-      }
-      if (categoryDetails) {
-        payload.details = categoryDetails;
-      }
+    const categoryDetails = buildCategoryDetails(values, selectedCategory, setLocalError);
+    if (categoryDetails === false) {
+      return;
+    }
+    if (categoryDetails) {
+      payload.details = categoryDetails;
     }
     await onSubmit(payload);
   }
@@ -169,19 +180,40 @@ export default function ListingForm({
           />
         </div>
         <div className="listing-form__field listing-form__field--categories">
-          <label>Categories</label>
-          <div className="listing-form__categories">
-            {CATEGORY_OPTIONS.map((option) => (
-              <label key={option.value} className="listing-form__category-option">
-                <input
-                  type="checkbox"
-                  value={option.value}
-                  checked={selectedCategories.includes(option.value)}
-                  onChange={() => handleChange('category', option.value)}
-                />
-                {option.label}
-              </label>
-            ))}
+          <label htmlFor="category">Category</label>
+          <div className="listing-form__categories" role="radiogroup" aria-label="Listing category">
+            {CATEGORY_OPTIONS.map((option) => {
+              const selected = values.category === option.value;
+              const meta = CATEGORY_CARD_DETAILS[option.value] || {};
+              return (
+                <label
+                  key={option.value}
+                  data-category={option.value}
+                  className={`listing-form__category-option${selected ? ' listing-form__category-option--selected' : ''}`}
+                  style={
+                    meta.image
+                      ? {
+                          backgroundImage: `linear-gradient(${meta.overlay || DEFAULT_CATEGORY_OVERLAY}), url(${meta.image})`,
+                        }
+                      : undefined
+                  }
+                >
+                  <input
+                    type="radio"
+                    name="category"
+                    value={option.value}
+                    checked={selected}
+                    onChange={() => handleChange('category', option.value)}
+                  />
+                  <span
+                    className="listing-form__category-accent"
+                    aria-hidden="true"
+                    style={{ backgroundColor: CATEGORY_ACCENT_COLOR }}
+                  />
+                  <span className="listing-form__category-label">{option.label}</span>
+                </label>
+              );
+            })}
           </div>
         </div>
         <div className="listing-form__field listing-form__field--textarea listing-form__field--full">
@@ -212,9 +244,7 @@ export default function ListingForm({
           </div>
         )}
       </div>
-      {selectedCategories.length === 1 && (
-        <CategorySpecificFields values={values} onChange={handleChange} />
-      )}
+      {values.category && <CategorySpecificFields values={values} onChange={handleChange} />}
       {children && <div className="listing-form__section">{children}</div>}
       {(localError || error) && <p className="listing-form__error">{localError || error}</p>}
       <div className="listing-form__footer">

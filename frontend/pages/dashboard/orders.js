@@ -62,7 +62,12 @@ function OrderList({ title, orders, emptyMessage, role, onConfirm, confirmingMap
 
             const buyerConfirmed = formatDate(order.buyer_confirmed_at) || '-';
             const sellerConfirmed = formatDate(order.seller_confirmed_at) || '-';
-            const createdAt = formatDate(order.created_at) || '-';
+            const orderedRaw =
+              order.created_at ||
+              order.buyer_confirmed_at ||
+              order.seller_confirmed_at ||
+              product.created_at;
+            const createdAt = formatDate(orderedRaw) || '-';
 
             const isBuyer = role === 'buyer';
             const hasConfirmed = isBuyer ? !!order.buyer_confirmed : !!order.seller_confirmed;
