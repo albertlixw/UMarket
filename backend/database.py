@@ -522,10 +522,13 @@ def create_order(order_data: Dict[str, Any]) -> Dict[str, Any]:
     headers["Prefer"] = "return=representation"
     product_select = _select_clause_with_details()
     params = {"select": f"*,product:{_product_relationship()}({product_select})"}
-    resp = requests.post(url, headers=headers, params=params, json=order_data)
+    resp = requests.post(url, json=payload, headers=headers)
     resp.raise_for_status()
-    created = resp.json()
-    return _normalize_order(created[0])
+    return resp.json()
+    # resp = requests.post(url, headers=headers, params=params, json=order_data)
+    # resp.raise_for_status()
+    # created = resp.json()
+    # return _normalize_order(created[0])
 
 
 def get_order(order_id: str) -> Optional[Dict[str, Any]]:
