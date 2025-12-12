@@ -331,7 +331,7 @@ def create_order(order: schemas.OrderCreate, user_id: str = Depends(get_current_
         order_payload["payment_method"] = order.payment_method.upper()
 
     # make sure transactions capture when they were placed so the dashboard can show the ordered timestamp
-    order_payload.setdefault("created_at", _now_iso())
+    # order_payload.setdefault("created_at", _now_iso())
 
     created = database.create_order(order_payload)
 
