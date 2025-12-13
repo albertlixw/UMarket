@@ -6,6 +6,10 @@ purchase items from other students. Access is restricted to users with a
 `@umass.edu` email address via Supabase Auth hooks. This repository
 implements a FastAPI backend and Next.js frontend.
 
+## TODO 
+move search bar to sticky on bottom on mobile view
+allow users to cancel orders if they regret buying, so that the buyer won't need to list all the details again. 
+
 ## Features
 
 - **Student‑only access:** Sign-ups are restricted to `umass.edu` email addresses
