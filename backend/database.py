@@ -530,7 +530,7 @@ def get_orders(filters: Optional[Dict[str, Any]] = None, user_jwt: Optional[str]
                 params[key] = f"eq.{str(value).lower()}"
             else:
                 params[key] = f"eq.{value}"
-resp = requests.get(url, headers=_user_headers(user_jwt), params=params)
+    resp = requests.get(url, headers=_user_headers(user_jwt), params=params)
     resp.raise_for_status()
     data = resp.json()
     if isinstance(data, dict) and data.get("message"):
