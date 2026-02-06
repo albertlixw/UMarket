@@ -32,6 +32,11 @@ app.add_middleware(
 
 _http_bearer = HTTPBearer(auto_error=False)
 
+def get_bearer_token(credential: HTTPAuthorizationCredentials = Depends(_http_bearer)) -> str:
+    if credential is None or not credential.credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+    return credential.credentials
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -283,7 +288,7 @@ def remove_listing(listing_id: str, user_id: str = Depends(get_current_user_id))
 def list_orders(
     role: str = "buyer",
     user_id: str = Depends(get_current_user_id),
-) -> List[schemas.Order]:
+    token: str = Depends(get_bearer_token),) -> List[schemas.Order]:
     # return transactions for the current user as buyer or seller
     if role not in {"buyer", "seller"}:
         raise HTTPException(
@@ -295,12 +300,12 @@ def list_orders(
         filters["buyer_id"] = user_id
     else:
         filters["product.seller_id"] = user_id
-    orders = database.get_orders(filters)
+    orders = database.get_orders(filters, user_jwt=token)
     return orders
 
 
 @app.post("/orders", response_model=schemas.Order, status_code=status.HTTP_201_CREATED)
-def create_order(order: schemas.OrderCreate, user_id: str = Depends(get_current_user_id)):
+def create_order(order: schemas.OrderCreate, user_id: str = Depends(get_current_user_id), token: str = Depends(get_bearer_token)):
     # create a new transaction for a product listing
 
     listing = database.get_listing(order.listing_id)
@@ -333,7 +338,7 @@ def create_order(order: schemas.OrderCreate, user_id: str = Depends(get_current_
     # make sure transactions capture when they were placed so the dashboard can show the ordered timestamp
     order_payload.setdefault("created_at", _now_iso())
 
-    created = database.create_order(order_payload)
+    created = database.create_order(order_payload, user_jwt=token)
 
     update_fields: Dict[str, Any] = {}
     if isinstance(quantity, int):
@@ -357,7 +362,7 @@ def create_order(order: schemas.OrderCreate, user_id: str = Depends(get_current_
 def update_order(
     order_id: str,
     payload: schemas.OrderUpdate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_current_user_id), token: str = Depends(get_bearer_token)
 ):
     order = _order_or_404(order_id)
     product = order.get("product")
